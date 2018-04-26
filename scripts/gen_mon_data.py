@@ -73,6 +73,8 @@ mon_names = [
     "Epsilon",
     "Del Lily",
     "Ill Gill",
+    "Sand Rappy",
+    "Del Rappy",
     "Astark",
     "Satellite Lizard",
     "Yowie",

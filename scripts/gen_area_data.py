@@ -31,7 +31,7 @@ ep2_area_names = [
     "Jungle North",
     "Jungle East",
     "Mountain",
-    "Seaside Day",
+    "Seaside",
     "Seabed Upper",
     "Seabed Lower",
     "Gal Gryphon",

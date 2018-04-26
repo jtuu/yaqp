@@ -78,6 +78,8 @@ typedef enum {
     MON_EPSILON,
     MON_DEL_LILY,
     MON_ILL_GILL,
+    MON_SAND_RAPPY,
+    MON_DEL_RAPPY,
     MON_ASTARK,
     MON_SATELLITE_LIZARD,
     MON_YOWIE,
@@ -101,7 +103,7 @@ typedef enum {
     MON_IGNORE
 } mon_kind;
 
-#define NUM_NPCS 95
+#define NUM_NPCS 97
 const char* const npc_names[NUM_NPCS] = {
     [MON_HILDEBEAR] = "Hildebear",
     [MON_HILDEBLUE] = "Hildeblue",
@@ -177,6 +179,8 @@ const char* const npc_names[NUM_NPCS] = {
     [MON_EPSILON] = "Epsilon",
     [MON_DEL_LILY] = "Del Lily",
     [MON_ILL_GILL] = "Ill Gill",
+    [MON_SAND_RAPPY] = "Sand Rappy",
+    [MON_DEL_RAPPY] = "Del Rappy",
     [MON_ASTARK] = "Astark",
     [MON_SATELLITE_LIZARD] = "Satellite Lizard",
     [MON_YOWIE] = "Yowie",

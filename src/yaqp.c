@@ -27,6 +27,11 @@ The Phantasy Star Online Developer's Wiki was used as reference.
 (http://sharnoth.com/psodevwiki/format/qst, http://sharnoth.com/psodevwiki/format/dat)
 */
 
+/*
+Contains parts of the Tethealla project.
+(https://pioneer2.net)
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -115,12 +120,30 @@ typedef enum {
 #define BREED_1TO1_MAP_(name) case BREED_##name: return MON_##name
 #define BREED_1TO1_MAP(name) BREED_1TO1_MAP_(name)
 
+// similar to ParseMapData of Tethealla's ship_server.c
+/************************************************************************
+	Tethealla Ship Server
+	Copyright (C) 2008  Terry Chatman Jr.
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License version 3 as
+	published by the Free Software Foundation.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+************************************************************************/
 int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     switch (npc->npc_type) {
     case BREED_BEAR:
         return npc->skin & 0x01 ? MON_HILDEBLUE : MON_HILDEBEAR;
     case BREED_RAPPY:
-        return npc->skin & 0x01 ? (episode == 2 ? MON_LOVE_RAPPY : MON_AL_RAPPY) : MON_RAG_RAPPY;
+        return episode == 4 ? (npc->skin & 0x01 ? MON_DEL_RAPPY : MON_SAND_RAPPY) :
+            (npc->skin & 0x01 ? (episode == 2 ? MON_LOVE_RAPPY : MON_AL_RAPPY) : MON_RAG_RAPPY);
     case BREED_WOLF:
         return npc->flags & NPC_MASK ? MON_BARBAROUS_WOLF : MON_SAVAGE_WOLF;
     case BREED_BOOMA:
@@ -257,7 +280,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
         return npc->flags & NPC_MASK ? MON_KONDRIEU :
             (npc->skin & 0x01 ? MON_SHAMBERTIN : MON_SAINT_MILION);
     default:
-        return npc->npc_type;
+        return MON_IGNORE;
     }
 }
 
@@ -269,12 +292,6 @@ char* get_npc_name(int type) {
     char *str = malloc(16);
     snprintf(str, 16, "Unknown %d", type);
     return str;
-}
-
-void print_npc_node(node_t *node) {
-    if (node != NULL) {
-        printf("    %s: %d\n", get_npc_name(node->key), *(int *) node->data);
-    }
 }
 
 int file_path_detect_episode(char *path) {
@@ -379,6 +396,86 @@ int bin_detect_episode(bin_t *bin) {
 }
 
 const int one = 1;
+const int eight = 8;
+
+node_t* count_monsters(dat_t *dat, int episode) {
+    node_t *area_npc_counts = NULL;
+
+    for (int i = dat->num_tables - 1; i >= 0; i--) {
+        dat_table_t *tbl = dat->entity_tables[i];
+        int area = tbl->header->area;
+        if (tbl->header->type != DAT_TYPE_NPC || area == 0) {
+            continue;
+        }
+
+        node_t *area_node = find_node(area_npc_counts, area);
+        node_t *waves = NULL;
+        if (area_node != NULL) {
+            waves = *(node_t **) area_node->data;
+        } else {
+            area_npc_counts = prepend_node(area_npc_counts, area, 0, NULL);
+            area_node = area_npc_counts;
+        }
+
+        for (unsigned int j = 0; j < tbl->num_items; j++) {
+            dat_npc_t *npc = tbl->body.npcs[j];
+            int kind = get_npc_kind(npc, episode, area);
+            if (kind == MON_IGNORE) {
+                continue;
+            }
+
+            node_t *wave_node = find_node(waves, npc->wave_id);
+            node_t *npc_counts = NULL;
+            if (wave_node != NULL) {
+                npc_counts = *(node_t **) wave_node->data;
+            } else {
+                wave_node = prepend_node(waves, npc->wave_id, 0, NULL);
+                waves = wave_node;
+                node_t **ptr = area_node->data;
+                *ptr = waves;
+            }
+            
+            node_t *count_node = find_node(npc_counts, kind);
+            if (count_node != NULL) {
+                (*(int *) count_node->data)++;
+            } else {
+                npc_counts = prepend_node(npc_counts, kind, sizeof(int), &one);
+                node_t **ptr = wave_node->data;
+                *ptr = npc_counts;
+            }
+            
+            switch (kind) {
+            case MON_CANANE:
+                {
+                    node_t *canadine_node = find_node(npc_counts, MON_CANADINE);
+                    if (canadine_node != NULL) {
+                        (*(int *) canadine_node->data) += 8;
+                    } else {
+                        npc_counts = prepend_node(npc_counts, MON_CANADINE, sizeof(int), &eight);
+                        node_t **ptr = wave_node->data;
+                        *ptr = npc_counts;
+                    }
+                }
+                break;
+            case MON_RECOBOX:
+                {
+                    node_t *recon_node = find_node(npc_counts, MON_RECON);
+                    int clone_count = npc->clone_count;
+                    if (recon_node != NULL) {
+                        (*(int *) recon_node->data) += clone_count;
+                    } else {
+                        npc_counts = prepend_node(npc_counts, MON_RECON, sizeof(int), &clone_count);
+                        node_t **ptr = wave_node->data;
+                        *ptr = npc_counts;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    
+    return area_npc_counts;
+}
 
 int main(int argc, char *argv[]) {
     if (argc <= 1) {
@@ -420,8 +517,6 @@ int main(int argc, char *argv[]) {
     bin_t *bin = parse_bin(bin_sz, bin_data);
     
     print_wide_str(bin->quest_name);
-    
-    node_t *area_npc_counts = NULL;
 
     int episode = bin_detect_episode(bin);
     if (episode == -1) {
@@ -435,62 +530,35 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    unsigned int num_areas;
-    const char *const*area_names = ep1_area_names;
+    const char* const *area_names = ep1_area_names;
 
     switch (episode) {
     default:
     case 1:
-        num_areas = NUM_EP1_AREAS;
         area_names = ep1_area_names;
         break;
     case 2:
-        num_areas = NUM_EP2_AREAS;
         area_names = ep2_area_names;
         break;
     case 4:
-        num_areas = NUM_EP4_AREAS;
         area_names = ep4_area_names;
         break;
     }
 
-    for (int i = dat->num_tables - 1; i >= 0; i--) {
-        dat_table_t *tbl = dat->entity_tables[i];
-        int area = tbl->header->area;
-        if (tbl->header->type != DAT_TYPE_NPC || area >= num_areas || area == 0) {
-            continue;
-        }
+    node_t *n = count_monsters(dat, episode);
 
-        node_t *area_node = find_node(area_npc_counts, area);
-        node_t *npc_counts = NULL;
-        if (area_node != NULL) {
-            npc_counts = *(node_t **) area_node->data;
-        } else {
-            area_npc_counts = prepend_node(area_npc_counts, area, 0, NULL);
-            area_node = area_npc_counts;
-        }
-
-        for (unsigned int j = 0; j < tbl->num_items; j++) {
-            dat_npc_t *npc = tbl->body.npcs[j];
-            int type = get_npc_kind(npc, episode, area);
-            if (type == MON_IGNORE) {
-                continue;
-            }
-            node_t *found = find_node(npc_counts, type);
-            if (found != NULL) {
-                (*(int *) found->data)++;
-            } else {
-                npc_counts = prepend_node(npc_counts, type, sizeof(int), &one);
-                node_t **ptr = area_node->data;
-                *ptr = npc_counts;
-            }
-        }
-    }
-
-    node_t *n = area_npc_counts;
     while (n != NULL) {
         printf("%s\n", area_names[n->key]);
-        traverse_nodes(*(node_t **) n->data, print_npc_node);
+        node_t *nn = *(node_t **) n->data;
+        while (nn != NULL) {
+            printf("    Wave %d\n", nn->key);
+            node_t *nnn = *(node_t **) nn->data;
+            while (nnn != NULL) {
+                printf("        %s: %d\n", get_npc_name(nnn->key), *(int *) nnn->data);
+                nnn = nnn->next;
+            }
+            nn = nn->next;
+        }
         n = n->next;
     }
 }
