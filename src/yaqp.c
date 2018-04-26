@@ -30,214 +30,263 @@ The Phantasy Star Online Developer's Wiki was used as reference.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <string.h>
 
-#include "../lib/include/PRS-decomp.h"
 #include "../lib/include/psoarchive-error.h"
+#include "qst.h"
+#include "bin.h"
+#include "dat.h"
+#include "utils.h"
+#include "list.h"
+#include "mon.h"
+#include "areas.h"
 
-#define NUM_QST_HEADER 2
-#define QST_HEADER_SZ 88
-#define QST_HEADER_UNKOWN2_SZ 38
-#define QST_FILE_NAME_SZ 16
-#define QST_MESSAGE_CHUNK_SZ 1024
-#define QST_MESSAGE_SZ 24 + QST_MESSAGE_CHUNK_SZ + 8
-#define QST_MESSAGE_UNKNOWN1_SZ 4
-#define QST_MESSAGE_UNKNOWN2_SZ 3
-#define QST_MESSAGE_UNKNOWN3_SZ 6
+typedef enum {
+    BREED_BEAR = 64,
+    BREED_RAPPY = 65,
+    BREED_MONEST = 66,
+    BREED_WOLF = 67,
+    BREED_BOOMA = 68,
 
-#define BIN 0
-#define DAT 1
+    BREED_GRASS_ASSASSIN = 96,
+    BREED_LILY = 97,
+    BREED_NANO_DRAGON = 98,
+    BREED_SHARK = 99,
+    BREED_SLIME = 100,
+    BREED_PAN_ARMS = 101,
 
-#define LE16(x) *(x) | (uint16_t) *(x + 1) << 8
-#define LE32(x) *(x) | (uint32_t) *(x + 1) << 8 | (uint32_t) *(x + 2) << 16 | (uint32_t) *(x + 3) << 24
+    BREED_CHIC = 128,
+    BREED_GARANZ = 129,
+    BREED_SINOW_NINJA = 130,
+    BREED_CANADINE = 131,
+    BREED_CANANE = 132,
+    BREED_DUBWITCH = 133,
 
-#define ARRAY_CONCAT(TYPE, A, An, B, Bn) (TYPE *)array_concat((const void *)(A), (An), (const void *)(B), (Bn), sizeof(TYPE));
+    BREED_DELSABER = 160,
+    BREED_CHAOS_SORCERER = 161,
+    BREED_DARK_GUNNER = 162,
+    BREED_DEATH_GUNNER = 163,
+    BREED_CHAOS_BRINGER = 164,
+    BREED_DARK_BELRA = 165,
+    BREED_DIMENIAN = 166,
+    BREED_BULCLAW = 167,
+    BREED_CLAW = 168,
 
-void *array_concat(const void *a, size_t an, const void *b, size_t bn, size_t s) {
-    char *p = malloc(s * (an + bn));
-    memcpy(p, a, an * s);
-    memcpy(p + an * s, b, bn * s);
-    return p;
-}
+    BREED_NATIVE_BOSS = 192,
+    BREED_DE_ROL_LE = 193,
+    BREED_VOL_OPT_ = 194,
+    BREED_VOL_OPT = 197,
+    BREED_DARK_FALZ = 200,
+    BREED_OLGA_FLOW = 202,
+    BREED_BARBA_RAY = 203,
+    BREED_GOL_DRAGON = 204,
 
-typedef struct qst_header {
-    uint16_t header_size; // 88
-    uint16_t unknown1; // 0x44
-    uint16_t quest_no;
-    uint8_t unknown2[QST_HEADER_UNKOWN2_SZ]; // Seems to always be zeroes
-    uint8_t file_name[QST_FILE_NAME_SZ]; // Null-terminated ASCII
-    uint32_t file_size;
-    uint8_t file_name_j[24]; // Null-terminated ASCII
-} qst_header_t;
+    BREED_SINOW_FAT_1 = 212,
+    BREED_MERIL = 213,
+    BREED_MERIC = 214,
+    BREED_GIBBON = 215,
 
-typedef struct qst_message {
-    uint8_t unknown1[QST_MESSAGE_UNKNOWN1_SZ];
-    uint8_t file_chunk_no; // Starts at 0, each file's chunks are numbered separately
-    uint8_t unknown2[QST_MESSAGE_UNKNOWN2_SZ];
-    uint8_t file_name[QST_FILE_NAME_SZ]; // Null-terminated ASCII
-    uint8_t *file_chunk;
-    uint16_t size;
-    uint8_t unknown3[QST_MESSAGE_UNKNOWN3_SZ];
-} qst_message_t;
+    BREED_GIBBLES = 216,
+    BREED_GEE = 217,
+    BREED_GI_GUE = 218,
 
-typedef struct qst_body {
-    unsigned int num_msgs;
-    qst_message_t **messages;
-} qst_body_t;
+    BREED_DELDEPTH = 219,
+    BREED_DELBITER = 220,
+    BREED_DOLM = 221,
+    BREED_MORFOS = 222,
+    BREED_RECOBOX = 223,
+    
+    BREED_SINOW_FAT_2 = 224,
+    BREED_ILL_GILL = 225,
 
-typedef struct qst {
-    qst_header_t *headers[NUM_QST_HEADER]; // 2 or possibly more?
-    qst_body_t body; // Variably sized
-} qst_t;
+    BREED_ASTARK = 272,
+    BREED_LIZARD = 273,
+    BREED_MERISSA = 274,
+    BREED_GIRTABLULU = 275,
+    BREED_ZU = 276,
+    BREED_BOOTA = 277,
+    BREED_DORPHON = 278,
+    BREED_GORAN = 279,
+    BREED_SNAKE = 281
+} mon_breed;
 
-qst_t* parse_qst(unsigned int data_len, unsigned char *data) {
-    unsigned char *cursor = data;
-    qst_t *qst = malloc(sizeof(qst_t));
+#define NPC_MASK 0x800000
 
-    for (int i = 0; i < NUM_QST_HEADER; i++) {
-        qst->headers[i] = (qst_header_t *) cursor;
-        cursor += QST_HEADER_SZ;
-    }
+#define BREED_1TO1_MAP_(name) case BREED_##name: return MON_##name
+#define BREED_1TO1_MAP(name) BREED_1TO1_MAP_(name)
 
-    unsigned int num_msgs = 0;
-    qst_message_t **msgs = (qst_message_t **) malloc(num_msgs * sizeof(qst_message_t *));
-
-    while (cursor - data < data_len) {
-        num_msgs++;
-        msgs = (qst_message_t **) realloc(msgs, num_msgs * sizeof(qst_message_t *));
-
-        qst_message_t *msg = malloc(sizeof(qst_message_t));
-
-        memcpy(msg->unknown1, cursor, QST_MESSAGE_UNKNOWN1_SZ);
-        cursor += QST_MESSAGE_UNKNOWN1_SZ * sizeof(msg->unknown1[0]);
-
-        msg->file_chunk_no = *cursor;
-        cursor += sizeof(msg->file_chunk_no);
-
-        memcpy(msg->unknown2, cursor, QST_MESSAGE_UNKNOWN2_SZ);
-        cursor += QST_MESSAGE_UNKNOWN2_SZ * sizeof(msg->unknown2[0]);
-
-        memcpy(msg->file_name, cursor, QST_FILE_NAME_SZ);
-        cursor += QST_FILE_NAME_SZ * sizeof(msg->file_name[0]);
-
-        uint16_t chunk_size = LE16(cursor + QST_MESSAGE_CHUNK_SZ);
-        msg->size = chunk_size;
-        
-        msg->file_chunk = (uint8_t *) malloc(chunk_size * sizeof(uint8_t));
-        memcpy(msg->file_chunk, cursor, chunk_size);
-
-        cursor += QST_MESSAGE_CHUNK_SZ;
-        cursor += sizeof(msg->size);
-
-        memcpy(msg->unknown3, cursor, QST_MESSAGE_UNKNOWN3_SZ);
-        cursor += QST_MESSAGE_UNKNOWN3_SZ * sizeof(msg->unknown3[0]);
-
-        msgs[num_msgs - 1] = msg;
-    }
-
-    qst_body_t body = {.num_msgs = num_msgs, .messages = msgs};
-    qst->body = body;
-
-    return qst;
-}
-
-void print_qst(qst_t *qst) {
-    for (int i = 0; i < NUM_QST_HEADER; i++) {
-        qst_header_t *h = qst->headers[i];
-        printf("qst_header {\n");
-        printf("    header_size = %d\n", h->header_size);
-        printf("    unknown1 = %d\n", h->unknown1);
-        printf("    quest_no = %d\n", h->quest_no);
-        printf("    unknown2 = [%d", h->unknown2[0]);
-        for (int j = 1; j < QST_HEADER_UNKOWN2_SZ; j++) {
-            printf(", %d", h->unknown2[j]);
-        }
-        printf("]\n");
-        printf("    file_name = \"%s\"\n", h->file_name);
-        printf("    file_size = %d\n", h->file_size);
-        printf("    file_name_j = \"%s\"\n", h->file_name_j);
-        printf("}\n");
-    }
-
-    for (unsigned int i = 0; i < qst->body.num_msgs; i++) {
-        qst_message_t *msg = qst->body.messages[i];
-        printf("qst_message {\n");
-        printf("    unknown1 = [%d", msg->unknown1[0]);
-        for (int j = 1; j < 4; j++) {
-            printf(", %d", msg->unknown1[j]);
-        }
-        printf("]\n");
-        printf("    file_chunk_no = %d\n", msg->file_chunk_no);
-        printf("    unknown2 = [%d", msg->unknown2[0]);
-        for (int j = 1; j < 3; j++) {
-            printf(", %d", msg->unknown2[j]);
-        }
-        printf("]\n");
-        printf("    file_name = \"%s\"\n", msg->file_name);
-        printf("    file_chunk = [%d", msg->file_chunk[0]);
-        for (int j = 1; j < 6; j++) {
-            printf(", %d", msg->file_chunk[j]);
-        }
-        printf(" ...]\n");
-        printf("    size = %d\n", msg->size);
-        printf("    unknown3 = [%d", msg->unknown3[0]);
-        for (int j = 1; j < QST_MESSAGE_UNKNOWN3_SZ; j++) {
-            printf(", %d", msg->unknown3[j]);
-        }
-        printf("]\n");
-        printf("}\n");
-    }
-}
-
-int qst_extract(qst_t *qst, uint8_t *result, int format) {
-    char *search_ext;
-
-    switch (format) {
-    case BIN:
-        search_ext = ".bin";
-        break;
-    case DAT:
-        search_ext = ".dat";
-        break;
-    default:
-        fprintf(stderr, "Unknown format for qst_extract: %d.\n", format);
-        return;
-    }
-
-    unsigned int prs_sz = 0;
-    uint8_t *prs = NULL;
-
-    for(unsigned int i = 0; i < qst->body.num_msgs; i++) {
-        qst_message_t *msg = qst->body.messages[i];
-        char *dot = strrchr((char *)msg->file_name, '.');
-        if (dot && !strcmp(dot, search_ext)) {
-            prs = ARRAY_CONCAT(uint8_t, prs, prs_sz, msg->file_chunk, msg->size);
-            prs_sz += msg->size;
-        }
-    }
-
-    int ret = pso_prs_decompress_buf(prs, result, prs_sz);
-
-    if (ret < 0) {
-        switch (ret) {
-        case PSOARCHIVE_EBADMSG:
-            fprintf(stderr, "PSOARCHIVE_EBADMSG\n");
-            break;
-        case PSOARCHIVE_EINVAL:
-            fprintf(stderr, "PSOARCHIVE_EINVAL\n");
-            break;
-        case PSOARCHIVE_EFAULT:
-            fprintf(stderr, "PSOARCHIVE_EFAULT\n");
-            break;
+int get_npc_kind(dat_npc_t *npc, int episode, int area) {
+    switch (npc->npc_type) {
+    case BREED_BEAR:
+        return npc->skin & 0x01 ? MON_HILDEBLUE : MON_HILDEBEAR;
+    case BREED_RAPPY:
+        return npc->skin & 0x01 ? MON_AL_RAPPY : MON_RAG_RAPPY;
+    case BREED_WOLF:
+        return npc->flags & NPC_MASK ? MON_BARBAROUS_WOLF : MON_SAVAGE_WOLF;
+    case BREED_BOOMA:
+        switch (npc->skin) {
+        case 0:
+            return MON_BOOMA;
+        case 1:
+            return MON_GOBOOMA;
+        case 2:
+            return MON_GIGOBOOMA;
         default:
-            fprintf(stderr, "Unknown error %d", ret);
-            break;
+            return MON_UNKNOWN;
         }
-        exit(1);
+    BREED_1TO1_MAP(MONEST);
+    case BREED_LILY:
+        return (episode == 2 && area > 15) ? MON_DEL_LILY :
+            (npc->flags & NPC_MASK ? MON_NAR_LILY : MON_POISON_LILY);
+    BREED_1TO1_MAP(NANO_DRAGON);
+    case BREED_SHARK:
+        switch (npc->skin) {
+        case 0:
+            return MON_EVIL_SHARK;
+        case 1:
+            return MON_PAL_SHARK;
+        case 2:
+            return MON_GUIL_SHARK;
+        default:
+            return MON_UNKNOWN;
+        }
+    case BREED_SLIME:
+        return npc->flags & NPC_MASK ? MON_POUILLY_SLIME : MON_POFUILLY_SLIME;
+    BREED_1TO1_MAP(PAN_ARMS);
+    case BREED_CHIC:
+        return npc->skin & 0x01 ? MON_GILLCHIC : MON_DUBCHIC;
+    BREED_1TO1_MAP(GARANZ);
+    case BREED_SINOW_NINJA:
+        return npc->flags & NPC_MASK ? MON_SINOW_GOLD : MON_SINOW_BEAT;
+    BREED_1TO1_MAP(CANADINE);
+    BREED_1TO1_MAP(CANANE);
+    BREED_1TO1_MAP(DUBWITCH);
+    BREED_1TO1_MAP(DELSABER);
+    BREED_1TO1_MAP(CHAOS_SORCERER);
+    BREED_1TO1_MAP(DARK_GUNNER);
+    BREED_1TO1_MAP(DEATH_GUNNER);
+    BREED_1TO1_MAP(CHAOS_BRINGER);
+    BREED_1TO1_MAP(DARK_BELRA);
+    case BREED_DIMENIAN:
+        switch (npc->skin) {
+        case 0:
+            return MON_DIMENIAN;
+        case 1:
+            return MON_LA_DIMENIAN;
+        case 2:
+            return MON_SO_DIMENIAN;
+        default:
+            return MON_UNKNOWN;
+        }
+    BREED_1TO1_MAP(BULCLAW);
+    BREED_1TO1_MAP(CLAW);
+    case BREED_NATIVE_BOSS:
+        return episode == 2 ? MON_GAL_GRYPHON : MON_DRAGON;
+    BREED_1TO1_MAP(DE_ROL_LE);
+    case BREED_VOL_OPT_:
+        return MON_IGNORE;
+    BREED_1TO1_MAP(VOL_OPT);
+    BREED_1TO1_MAP(DARK_FALZ);
+    BREED_1TO1_MAP(OLGA_FLOW);
+    BREED_1TO1_MAP(BARBA_RAY);
+    BREED_1TO1_MAP(GOL_DRAGON);
+    case BREED_SINOW_FAT_1:
+        return npc->skin & 0x01 ? MON_SINOW_SPIGELL : MON_SINOW_BERILL;
+    case BREED_MERIL:
+        return npc->skin & 0x01 ? MON_MERILTAS : MON_MERILLIA;
+    case BREED_MERIC:
+        switch (npc->skin) {
+        case 0:
+            return MON_MERICAROL;
+        case 1:
+            return MON_MERIKLE;
+        case 2:
+            return MON_MERICUS;
+        default:
+            return MON_UNKNOWN;
+        }
+    case BREED_GIBBON:
+        return npc->skin & 0x01 ? MON_ZOL_GIBBON : MON_UL_GIBBON;
+    BREED_1TO1_MAP(GIBBLES);
+    BREED_1TO1_MAP(GEE);
+    BREED_1TO1_MAP(GI_GUE);
+    BREED_1TO1_MAP(DELDEPTH);
+    BREED_1TO1_MAP(DELBITER);
+    case BREED_DOLM:
+        return npc->skin & 0x01 ? MON_DOLMDARL : MON_DOLMOLM;
+    BREED_1TO1_MAP(MORFOS);
+    BREED_1TO1_MAP(RECOBOX);
+    case BREED_SINOW_FAT_2:
+        return area > 15 ? MON_EPSILON :
+            (npc->skin & 0x01 ? MON_SINOW_ZELE : MON_SINOW_ZOA);
+    BREED_1TO1_MAP(ILL_GILL);
+    BREED_1TO1_MAP(ASTARK);
+    case BREED_LIZARD:
+        return npc->flags & NPC_MASK ? MON_YOWIE : MON_SATELLITE_LIZARD;
+    case BREED_MERISSA:
+        return npc->skin & 0x01 ? MON_MERISSA_AA : MON_MERISSA_A;
+    BREED_1TO1_MAP(GIRTABLULU);
+    case BREED_ZU:
+        return npc->skin & 0x01 ? MON_PAZUZU : MON_ZU;
+    case BREED_BOOTA:
+        switch (npc->skin) {
+        case 0:
+            return MON_BOOTA;
+        case 1:
+            return MON_ZE_BOOTA;
+        case 2:
+            return MON_BA_BOOTA;
+        default:
+            return MON_UNKNOWN;
+        }
+    case BREED_DORPHON:
+        return npc->skin & 0x01 ? MON_DORPHON_ECLAIR : MON_DORPHON;
+    case BREED_GORAN:
+        switch (npc->skin) {
+        case 0:
+            return MON_GORAN;
+        case 1:
+            return MON_PYRO_GORAN;
+        case 2:
+            return MON_GORAN_DETONATOR;
+        default:
+            return MON_UNKNOWN;
+        }
+    case BREED_SNAKE:
+        return npc->flags & NPC_MASK ? MON_KONDRIEU :
+            (npc->skin & 0x01 ? MON_SHAMBERTIN : MON_SAINT_MILION);
+    default:
+        return npc->npc_type;
+    }
+}
+
+char* get_npc_name(int type) {
+    if (type >= 0 && type < NUM_NPCS) {
+        return npc_names[type];
     }
 
-    return ret;
+    char *str = malloc(16);
+    snprintf(str, 16, "Unknown %d", type);
+    return str;
 }
+
+void print_int_node(node_t *node) {
+    printf("%d: %d\n", node->key, *(int *) node->data);
+}
+
+void print_npc_node(node_t *node) {
+    if (node != NULL) {
+        printf("    %s: %d\n", get_npc_name(node->key), *(int *) node->data);
+    }
+}
+
+void print_npc_nodes(node_t *node) {
+    printf("%s\n", ep1_area_names[node->key]);
+    if (node != NULL) {
+        traverse_nodes(*(node_t **) node->data, print_npc_node);
+    }
+}
+
+const int one = 1;
 
 int main(int argc, char *argv[]) {
     if (argc <= 1) {
@@ -271,8 +320,52 @@ int main(int argc, char *argv[]) {
     qst_t *qst = parse_qst(file_sz, file_data);
     free(file_data);
 
-    // print_qst(qst);
-    uint8_t *dat_data = NULL;
-    int bin_sz = qst_extract(qst, &dat_data, DAT);
-    printf("%d\n", bin_sz);
+    uint8_t *dat_data;
+    uint8_t *bin_data;
+    int dat_sz = qst_extract(qst, &dat_data, DAT);
+    int bin_sz = qst_extract(qst, &bin_data, BIN);
+    dat_t *dat = parse_dat(dat_sz, dat_data);
+    bin_t *bin = parse_bin(bin_sz, bin_data);
+    
+    print_wide_str(bin->quest_name);
+    
+    node_t *area_npc_counts = NULL;
+
+    int episode = 1;
+
+    for (int i = 0; i < dat->num_tables; i++) {
+        dat_table_t *tbl = dat->entity_tables[i];
+        if (tbl->header->type != DAT_TYPE_NPC || tbl->header->area >= NUM_EP1_AREAS || tbl->header->area == 0) {
+            continue;
+        }
+
+        int area = tbl->header->area;
+
+        node_t *area_node = find_node(area_npc_counts, area);
+        node_t *npc_counts = NULL;
+        if (area_node != NULL) {
+            npc_counts = *(node_t **) area_node->data;
+        } else {
+            area_npc_counts = prepend_node(area_npc_counts, area, 0, NULL);
+            area_node = area_npc_counts;
+        }
+
+        for (int j = 0; j < tbl->num_items; j++) {
+            dat_npc_t *npc = tbl->body.npcs[j];
+            int type = get_npc_kind(npc, episode, area);
+            if (type == MON_IGNORE) {
+                continue;
+            }
+            node_t *found = find_node(npc_counts, type);
+            if (found != NULL) {
+                (*(int *) found->data)++;
+            } else {
+                npc_counts = prepend_node(npc_counts, type, sizeof(int), &one);
+                node_t **ptr = area_node->data;
+                *ptr = npc_counts;
+            }
+        }
+    }
+
+    traverse_nodes(area_npc_counts, print_npc_nodes);
 }
