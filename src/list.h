@@ -18,4 +18,6 @@ void traverse_nodes(node_t *head, node_traversal_callback_t cb);
 
 void dispose_nodes(node_t *head);
 
+node_t* reverse_nodes(node_t *head);
+
 #endif

@@ -15,6 +15,7 @@ typedef struct bin {
     uint16_t long_description[288];
     uint32_t padding;
     uint32_t items_list[932];
+    uint8_t *object_code;
 } bin_t;
 
 bin_t* parse_bin(unsigned int data_len, uint8_t *data);

@@ -48,6 +48,7 @@ mon_names = [
     "Olga Flow",
     "Barba Ray",
     "Gol Dragon",
+    "Love Rappy",
     "Sinow Berill",
     "Sinow Spigell",
     "Merillia",

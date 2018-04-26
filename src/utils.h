@@ -18,4 +18,6 @@ void print_byte_arr(int arr_len, uint8_t *arr);
 
 void print_wide_str(uint16_t *str);
 
+char* stristr(const char *str1, const char *str2);
+
 #endif

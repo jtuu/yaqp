@@ -63,3 +63,19 @@ void dispose_nodes(node_t *head) {
         }
     }
 }
+
+node_t* reverse_nodes(node_t *head) {
+    node_t *prev = NULL;
+    node_t *cur = head;
+    node_t *next;
+
+    while (cur != NULL) {
+        next = cur->next;
+        cur->next = prev;
+        prev = cur;
+        cur = next;
+    }
+
+    head = prev;
+    return head;
+}

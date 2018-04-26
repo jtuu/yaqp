@@ -53,6 +53,7 @@ typedef enum {
     MON_OLGA_FLOW,
     MON_BARBA_RAY,
     MON_GOL_DRAGON,
+    MON_LOVE_RAPPY,
     MON_SINOW_BERILL,
     MON_SINOW_SPIGELL,
     MON_MERILLIA,
@@ -100,7 +101,7 @@ typedef enum {
     MON_IGNORE
 } mon_kind;
 
-#define NUM_NPCS 94
+#define NUM_NPCS 95
 const char* const npc_names[NUM_NPCS] = {
     [MON_HILDEBEAR] = "Hildebear",
     [MON_HILDEBLUE] = "Hildeblue",
@@ -151,6 +152,7 @@ const char* const npc_names[NUM_NPCS] = {
     [MON_OLGA_FLOW] = "Olga Flow",
     [MON_BARBA_RAY] = "Barba Ray",
     [MON_GOL_DRAGON] = "Gol Dragon",
+    [MON_LOVE_RAPPY] = "Love Rappy",
     [MON_SINOW_BERILL] = "Sinow Berill",
     [MON_SINOW_SPIGELL] = "Sinow Spigell",
     [MON_MERILLIA] = "Merillia",

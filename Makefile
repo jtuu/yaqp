@@ -3,7 +3,7 @@ shift-list = $(wordlist 2,$(words $1),$1)
 shift-path = $(subst $(space),/,$(call shift-list,$(subst /, ,$1)))
 
 CC=gcc
-GEN_DEPS := src/mon.h
+GEN_DEPS := src/mon.h src/areas.h
 DEPS := $(shell echo ./**/*.h ./**/**/*.h)
 DEPS := $(GEN_DEPS)
 SRC := $(shell echo ./**/*.c)
@@ -21,6 +21,9 @@ bin/yaqp: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS)
 
 src/mon.h: scripts/gen_mon_data.py
+	python3 $< > $@
+
+src/areas.h: scripts/gen_area_data.py
 	python3 $< > $@
 
 .PHONY: clean

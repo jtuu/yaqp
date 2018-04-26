@@ -25,3 +25,21 @@ void print_wide_str(uint16_t *str) {
     } while(*(cur++) != 0);
     printf("\n");
 }
+
+char* stristr(const char *str1, const char *str2) {
+    do {
+        const char *s1 = str1;
+        const char *s2 = str2;
+
+        while (tolower((unsigned char) *s1) == tolower((unsigned char) *s2) && *s2) {
+            s1++;
+            s2++;
+        }
+
+        if (*s2 == NULL) {
+            return (char *) str1;
+        }
+    } while (*str1++);
+    
+    return NULL;
+}

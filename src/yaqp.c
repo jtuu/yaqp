@@ -30,6 +30,7 @@ The Phantasy Star Online Developer's Wiki was used as reference.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "../lib/include/psoarchive-error.h"
 #include "qst.h"
@@ -119,7 +120,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     case BREED_BEAR:
         return npc->skin & 0x01 ? MON_HILDEBLUE : MON_HILDEBEAR;
     case BREED_RAPPY:
-        return npc->skin & 0x01 ? MON_AL_RAPPY : MON_RAG_RAPPY;
+        return npc->skin & 0x01 ? (episode == 2 ? MON_LOVE_RAPPY : MON_AL_RAPPY) : MON_RAG_RAPPY;
     case BREED_WOLF:
         return npc->flags & NPC_MASK ? MON_BARBAROUS_WOLF : MON_SAVAGE_WOLF;
     case BREED_BOOMA:
@@ -134,9 +135,10 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
             return MON_UNKNOWN;
         }
     BREED_1TO1_MAP(MONEST);
+    BREED_1TO1_MAP(GRASS_ASSASSIN);
     case BREED_LILY:
-        return (episode == 2 && area > 15) ? MON_DEL_LILY :
-            (npc->flags & NPC_MASK ? MON_NAR_LILY : MON_POISON_LILY);
+        return area == EP2_TOWER ? MON_DEL_LILY :
+            (npc->skin & 0x01 ? MON_NAR_LILY : MON_POISON_LILY);
     BREED_1TO1_MAP(NANO_DRAGON);
     case BREED_SHARK:
         switch (npc->skin) {
@@ -194,7 +196,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     case BREED_MERIL:
         return npc->skin & 0x01 ? MON_MERILTAS : MON_MERILLIA;
     case BREED_MERIC:
-        switch (npc->skin) {
+        switch (npc->skin % 3) {
         case 0:
             return MON_MERICAROL;
         case 1:
@@ -216,7 +218,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     BREED_1TO1_MAP(MORFOS);
     BREED_1TO1_MAP(RECOBOX);
     case BREED_SINOW_FAT_2:
-        return area > 15 ? MON_EPSILON :
+        return area == EP2_TOWER ? MON_EPSILON :
             (npc->skin & 0x01 ? MON_SINOW_ZELE : MON_SINOW_ZOA);
     BREED_1TO1_MAP(ILL_GILL);
     BREED_1TO1_MAP(ASTARK);
@@ -269,21 +271,111 @@ char* get_npc_name(int type) {
     return str;
 }
 
-void print_int_node(node_t *node) {
-    printf("%d: %d\n", node->key, *(int *) node->data);
-}
-
 void print_npc_node(node_t *node) {
     if (node != NULL) {
         printf("    %s: %d\n", get_npc_name(node->key), *(int *) node->data);
     }
 }
 
-void print_npc_nodes(node_t *node) {
-    printf("%s\n", ep1_area_names[node->key]);
-    if (node != NULL) {
-        traverse_nodes(*(node_t **) node->data, print_npc_node);
+int file_path_detect_episode(char *path) {
+    char *txt_match = stristr(path, "episode");
+    if (txt_match == NULL) {
+        txt_match = stristr(path, "ep");
+        if (txt_match == NULL) {
+            return -1;
+        }
     }
+
+    char *num_match = strpbrk(txt_match, "124");
+    if (num_match == NULL) {
+        return -1;
+    }
+
+    int episode = *num_match - '0';
+    return episode;
+}
+
+int dat_detect_episode(dat_t *dat) {
+    for (int i = 0; i < dat->num_tables; i++) {
+        dat_table_t *tbl = dat->entity_tables[i];
+        int area = tbl->header->area;
+        if (tbl->header->type != DAT_TYPE_NPC || area == 0) {
+            continue;
+        }
+
+        for (unsigned int j = 0; j < tbl->num_items; j++) {
+            dat_npc_t *npc = tbl->body.npcs[j];
+
+            switch (npc->npc_type) {
+            case BREED_BOOMA:
+            case BREED_NANO_DRAGON:
+            case BREED_SHARK:
+            case BREED_SLIME:
+            case BREED_SINOW_NINJA:
+            case BREED_CANADINE:
+            case BREED_CANANE:
+            case BREED_DARK_GUNNER:
+            case BREED_DEATH_GUNNER:
+            case BREED_CHAOS_BRINGER:
+            case BREED_BULCLAW:
+            case BREED_CLAW:
+            case BREED_DE_ROL_LE:
+            case BREED_VOL_OPT:
+            case BREED_VOL_OPT_:
+            case BREED_DARK_FALZ:
+                return 1;
+            case BREED_OLGA_FLOW:
+            case BREED_BARBA_RAY:
+            case BREED_GOL_DRAGON:
+            case BREED_SINOW_FAT_1:
+            case BREED_MERIL:
+            case BREED_MERIC:
+            case BREED_GIBBON:
+            case BREED_GIBBLES:
+            case BREED_GEE:
+            case BREED_GI_GUE:
+            case BREED_DELDEPTH:
+            case BREED_DELBITER:
+            case BREED_DOLM:
+            case BREED_MORFOS:
+            case BREED_RECOBOX:
+            case BREED_SINOW_FAT_2:
+            case BREED_ILL_GILL:
+                return 2;
+            case BREED_ASTARK:
+            case BREED_LIZARD:
+            case BREED_MERISSA:
+            case BREED_GIRTABLULU:
+            case BREED_ZU:
+            case BREED_BOOTA:
+            case BREED_DORPHON:
+            case BREED_GORAN:
+            case BREED_SNAKE:
+                return 4;
+            }
+        }
+    }
+    return -1;
+}
+
+int bin_detect_episode(bin_t *bin) {
+    int obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
+    for (int i = 0; i < obj_code_len - 2; i++) {
+        uint8_t a = bin->object_code[i];
+        uint8_t b = bin->object_code[i + 1];
+        uint8_t c = bin->object_code[i + 2];
+        if (a == 0xf8 && b == 0xbc) {
+            switch (c) {
+            case 0:
+                return 1;
+            case 1:
+                return 2;
+            case 2:
+                return 4;
+            }
+        }
+    }
+    return -1;
 }
 
 const int one = 1;
@@ -331,15 +423,43 @@ int main(int argc, char *argv[]) {
     
     node_t *area_npc_counts = NULL;
 
-    int episode = 1;
+    int episode = bin_detect_episode(bin);
+    if (episode == -1) {
+        episode = dat_detect_episode(dat);
+        if (episode == -1) {
+            episode = file_path_detect_episode(inp_filename);
+            if (episode == -1) {
+                fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
+                episode = 1;
+            }
+        }
+    }
 
-    for (int i = 0; i < dat->num_tables; i++) {
+    unsigned int num_areas;
+    const char *const*area_names = ep1_area_names;
+
+    switch (episode) {
+    default:
+    case 1:
+        num_areas = NUM_EP1_AREAS;
+        area_names = ep1_area_names;
+        break;
+    case 2:
+        num_areas = NUM_EP2_AREAS;
+        area_names = ep2_area_names;
+        break;
+    case 4:
+        num_areas = NUM_EP4_AREAS;
+        area_names = ep4_area_names;
+        break;
+    }
+
+    for (int i = dat->num_tables - 1; i >= 0; i--) {
         dat_table_t *tbl = dat->entity_tables[i];
-        if (tbl->header->type != DAT_TYPE_NPC || tbl->header->area >= NUM_EP1_AREAS || tbl->header->area == 0) {
+        int area = tbl->header->area;
+        if (tbl->header->type != DAT_TYPE_NPC || area >= num_areas || area == 0) {
             continue;
         }
-
-        int area = tbl->header->area;
 
         node_t *area_node = find_node(area_npc_counts, area);
         node_t *npc_counts = NULL;
@@ -350,7 +470,7 @@ int main(int argc, char *argv[]) {
             area_node = area_npc_counts;
         }
 
-        for (int j = 0; j < tbl->num_items; j++) {
+        for (unsigned int j = 0; j < tbl->num_items; j++) {
             dat_npc_t *npc = tbl->body.npcs[j];
             int type = get_npc_kind(npc, episode, area);
             if (type == MON_IGNORE) {
@@ -367,5 +487,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    traverse_nodes(area_npc_counts, print_npc_nodes);
+    node_t *n = area_npc_counts;
+    while (n != NULL) {
+        printf("%s\n", area_names[n->key]);
+        traverse_nodes(*(node_t **) n->data, print_npc_node);
+        n = n->next;
+    }
 }
