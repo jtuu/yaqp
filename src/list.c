@@ -79,3 +79,36 @@ node_t* reverse_nodes(node_t *head) {
     head = prev;
     return head;
 }
+
+node_t* sort_nodes(node_t *head) {
+    node_t *x, *y, *e;
+
+    x = head;
+    head = NULL;
+
+    while (x != NULL) {
+        e = x;
+        x = x->next;
+
+        if (head != NULL) {
+            if (e->key > head->key) {
+                y = head;
+                
+                while ((y->next != NULL) && (e->key > y->next->key)) {
+                    y = y->next;
+                }
+
+                e->next = y->next;
+                y->next = e;
+            } else {
+                e->next = head;
+                head = e;
+            }
+        } else {
+            e->next = NULL;
+            head = e;
+        }
+    }
+
+    return head;
+}

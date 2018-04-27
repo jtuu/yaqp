@@ -22,7 +22,7 @@ void print_wide_str(uint16_t *str) {
     uint16_t *cur = str;
     do {
         printf("%lc", *cur);
-    } while(*(cur++) != 0);
+    } while(*(++cur) != 0);
     printf("\n");
 }
 

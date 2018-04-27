@@ -395,6 +395,7 @@ int bin_detect_episode(bin_t *bin) {
     return -1;
 }
 
+const long null = 0;
 const int one = 1;
 const int eight = 8;
 
@@ -409,11 +410,11 @@ node_t* count_monsters(dat_t *dat, int episode) {
         }
 
         node_t *area_node = find_node(area_npc_counts, area);
-        node_t *waves = NULL;
+        node_t *rooms = NULL;
         if (area_node != NULL) {
-            waves = *(node_t **) area_node->data;
+            rooms = *(node_t **) area_node->data;
         } else {
-            area_npc_counts = prepend_node(area_npc_counts, area, 0, NULL);
+            area_npc_counts = prepend_node(area_npc_counts, area, sizeof(node_t *), &null);
             area_node = area_npc_counts;
         }
 
@@ -424,14 +425,25 @@ node_t* count_monsters(dat_t *dat, int episode) {
                 continue;
             }
 
+            node_t *room_node = find_node(rooms, npc->section);
+            node_t *waves = NULL;
+            if (room_node != NULL) {
+                waves = *(node_t **) room_node->data;
+            } else {
+                room_node = prepend_node(rooms, npc->section, sizeof(node_t *), &null);
+                rooms = room_node;
+                node_t **ptr = area_node->data;
+                *ptr = rooms;
+            }
+
             node_t *wave_node = find_node(waves, npc->wave_id);
             node_t *npc_counts = NULL;
             if (wave_node != NULL) {
                 npc_counts = *(node_t **) wave_node->data;
             } else {
-                wave_node = prepend_node(waves, npc->wave_id, 0, NULL);
+                wave_node = prepend_node(waves, npc->wave_id, sizeof(node_t *), &null);
                 waves = wave_node;
-                node_t **ptr = area_node->data;
+                node_t **ptr = room_node->data;
                 *ptr = waves;
             }
             
@@ -477,6 +489,43 @@ node_t* count_monsters(dat_t *dat, int episode) {
     return area_npc_counts;
 }
 
+void print_monster_counts(node_t *area, int episode) {
+    const char* const *area_names = ep1_area_names;
+
+    switch (episode) {
+    default:
+    case 1:
+        area_names = ep1_area_names;
+        break;
+    case 2:
+        area_names = ep2_area_names;
+        break;
+    case 4:
+        area_names = ep4_area_names;
+        break;
+    }
+    
+    while (area != NULL) {
+        printf("%s\n", area_names[area->key]);
+        node_t *room = *(node_t **) area->data;
+        while (room != NULL) {
+            printf("    Room %d\n", room->key);
+            node_t *wave = sort_nodes(*(node_t **) room->data);
+            while (wave != NULL) {
+                printf("        Wave %d\n", wave->key);
+                node_t *mon = *(node_t **) wave->data;
+                while (mon != NULL) {
+                    printf("            %s: %d\n", get_npc_name(mon->key), *(int *) mon->data);
+                    mon = mon->next;
+                }
+                wave = wave->next;
+            }
+            room = room->next;
+        }
+        area = area->next;
+    }
+}
+
 int main(int argc, char *argv[]) {
     if (argc <= 1) {
         fprintf(stderr, "No input file specified.\n");
@@ -504,6 +553,9 @@ int main(int argc, char *argv[]) {
         }
 
         fclose(file);
+    } else {
+        fprintf(stderr, "Failed to open %s\n", inp_filename);
+        exit(1);
     }
 
     qst_t *qst = parse_qst(file_sz, file_data);
@@ -530,35 +582,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    const char* const *area_names = ep1_area_names;
-
-    switch (episode) {
-    default:
-    case 1:
-        area_names = ep1_area_names;
-        break;
-    case 2:
-        area_names = ep2_area_names;
-        break;
-    case 4:
-        area_names = ep4_area_names;
-        break;
-    }
-
-    node_t *n = count_monsters(dat, episode);
-
-    while (n != NULL) {
-        printf("%s\n", area_names[n->key]);
-        node_t *nn = *(node_t **) n->data;
-        while (nn != NULL) {
-            printf("    Wave %d\n", nn->key);
-            node_t *nnn = *(node_t **) nn->data;
-            while (nnn != NULL) {
-                printf("        %s: %d\n", get_npc_name(nnn->key), *(int *) nnn->data);
-                nnn = nnn->next;
-            }
-            nn = nn->next;
-        }
-        n = n->next;
-    }
+    node_t *area = count_monsters(dat, episode);
+    print_monster_counts(area, episode);
 }
