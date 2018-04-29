@@ -23,7 +23,6 @@ void print_wide_str(uint16_t *str) {
     do {
         printf("%lc", *cur);
     } while(*(++cur) != 0);
-    printf("\n");
 }
 
 char* stristr(const char *str1, const char *str2) {

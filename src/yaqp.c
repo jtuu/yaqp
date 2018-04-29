@@ -526,6 +526,77 @@ void print_monster_counts(node_t *area, int episode) {
     }
 }
 
+void print_monster_counts_as_json(bin_t *bin, node_t *area, int episode) {
+    const char* const *area_names = ep1_area_names;
+
+    switch (episode) {
+    default:
+    case 1:
+        area_names = ep1_area_names;
+        break;
+    case 2:
+        area_names = ep2_area_names;
+        break;
+    case 4:
+        area_names = ep4_area_names;
+        break;
+    }
+
+    printf("{\n  \"quest_name\": \"");
+    print_wide_str(bin->quest_name);
+    printf("\",\n  \"areas\": [\n");
+
+    while (area != NULL) {
+        printf("    {\n      \"area_name\": \"%s\",\n      \"rooms\": [\n", area_names[area->key]);
+        node_t *room = *(node_t **) area->data;
+        
+        while (room != NULL) {
+            printf("        {\n          \"room_id\": %d,\n          \"waves\": [\n", room->key);
+            node_t *wave = sort_nodes(*(node_t **) room->data);
+            
+            while (wave != NULL) {
+                printf("            {\n              \"wave_id\": %d,\n              \"monsters\": [\n", wave->key);
+                node_t *mon = *(node_t **) wave->data;
+
+                while (mon != NULL) {
+                    printf("                {\n                  \"monster_name\": \"%s\",\n                  \"count\": %d\n                }", get_npc_name(mon->key), *(int *) mon->data);
+                    mon = mon->next;
+
+                    if (mon != NULL) {
+                        printf(",\n");
+                    } else {
+                        printf("\n");
+                    }
+                }
+                wave = wave->next;
+
+                if (wave != NULL) {
+                    printf("              ]\n            },\n");
+                } else {
+                    printf("              ]\n            }\n");
+                }
+            }
+            room = room->next;
+
+            if (room != NULL) {
+                printf("          ]\n        },\n");
+            } else {
+                printf("          ]\n        }\n");
+            }
+        }
+        
+        area = area->next;
+        
+        if (area != NULL) {
+            printf("      ]\n    },\n");
+        } else {
+            printf("      ]\n    }\n");
+        }
+    }
+
+    printf("  ]\n}\n");
+}
+
 int main(int argc, char *argv[]) {
     if (argc <= 1) {
         fprintf(stderr, "No input file specified.\n");
@@ -568,8 +639,6 @@ int main(int argc, char *argv[]) {
     dat_t *dat = parse_dat(dat_sz, dat_data);
     bin_t *bin = parse_bin(bin_sz, bin_data);
     
-    print_wide_str(bin->quest_name);
-
     int episode = bin_detect_episode(bin);
     if (episode == -1) {
         episode = dat_detect_episode(dat);
@@ -583,5 +652,5 @@ int main(int argc, char *argv[]) {
     }
 
     node_t *area = count_monsters(dat, episode);
-    print_monster_counts(area, episode);
+    print_monster_counts_as_json(bin, area, episode);
 }
