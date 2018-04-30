@@ -160,7 +160,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     BREED_1TO1_MAP(MONEST);
     BREED_1TO1_MAP(GRASS_ASSASSIN);
     case BREED_LILY:
-        return area == EP2_TOWER ? MON_DEL_LILY :
+        return area == EP2_CONTROL_TOWER ? MON_DEL_LILY :
             (npc->skin & 0x01 ? MON_NAR_LILY : MON_POISON_LILY);
     BREED_1TO1_MAP(NANO_DRAGON);
     case BREED_SHARK:
@@ -241,7 +241,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     BREED_1TO1_MAP(MORFOS);
     BREED_1TO1_MAP(RECOBOX);
     case BREED_SINOW_FAT_2:
-        return area == EP2_TOWER ? MON_EPSILON :
+        return area == EP2_CONTROL_TOWER ? MON_EPSILON :
             (npc->skin & 0x01 ? MON_SINOW_ZELE : MON_SINOW_ZOA);
     BREED_1TO1_MAP(ILL_GILL);
     BREED_1TO1_MAP(ASTARK);

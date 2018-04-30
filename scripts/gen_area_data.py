@@ -17,8 +17,8 @@ ep1_area_names = [
     "Monitor Room",
     "????",
     "Visual Lobby",
-    "Spaceship",
-    "Temple"
+    "VR Spaceship Alpha",
+    "VR Temple Alpha"
 ]
 
 ep2_area_names = [
@@ -34,12 +34,12 @@ ep2_area_names = [
     "Seaside",
     "Seabed Upper",
     "Seabed Lower",
-    "Gal Gryphon",
-    "Olga Flow",
-    "Barba Ray",
-    "Gol Dragon",
+    "Cliffs of Gal Da Val",
+    "Test Subject Disposal Area",
+    "VR Temple Final",
+    "VR Spaceship Final",
     "Seaside Night",
-    "Tower"
+    "Control Tower"
 ]
 
 ep4_area_names = [

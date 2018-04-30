@@ -20,8 +20,8 @@ typedef enum {
     EP1_MONITOR_ROOM,
     EP1_____,
     EP1_VISUAL_LOBBY,
-    EP1_SPACESHIP,
-    EP1_TEMPLE
+    EP1_VR_SPACESHIP_ALPHA,
+    EP1_VR_TEMPLE_ALPHA
 } ep1_area;
 
 typedef enum {
@@ -37,12 +37,12 @@ typedef enum {
     EP2_SEASIDE,
     EP2_SEABED_UPPER,
     EP2_SEABED_LOWER,
-    EP2_GAL_GRYPHON,
-    EP2_OLGA_FLOW,
-    EP2_BARBA_RAY,
-    EP2_GOL_DRAGON,
+    EP2_CLIFFS_OF_GAL_DA_VAL,
+    EP2_TEST_SUBJECT_DISPOSAL_AREA,
+    EP2_VR_TEMPLE_FINAL,
+    EP2_VR_SPACESHIP_FINAL,
     EP2_SEASIDE_NIGHT,
-    EP2_TOWER
+    EP2_CONTROL_TOWER
 } ep2_area;
 
 typedef enum {
@@ -77,8 +77,8 @@ const char* const ep1_area_names[NUM_EP1_AREAS] = {
     [EP1_MONITOR_ROOM] = "Monitor Room",
     [EP1_____] = "????",
     [EP1_VISUAL_LOBBY] = "Visual Lobby",
-    [EP1_SPACESHIP] = "Spaceship",
-    [EP1_TEMPLE] = "Temple"
+    [EP1_VR_SPACESHIP_ALPHA] = "VR Spaceship Alpha",
+    [EP1_VR_TEMPLE_ALPHA] = "VR Temple Alpha"
 };
 
 #define NUM_EP2_AREAS 18
@@ -95,12 +95,12 @@ const char* const ep2_area_names[NUM_EP2_AREAS] = {
     [EP2_SEASIDE] = "Seaside",
     [EP2_SEABED_UPPER] = "Seabed Upper",
     [EP2_SEABED_LOWER] = "Seabed Lower",
-    [EP2_GAL_GRYPHON] = "Gal Gryphon",
-    [EP2_OLGA_FLOW] = "Olga Flow",
-    [EP2_BARBA_RAY] = "Barba Ray",
-    [EP2_GOL_DRAGON] = "Gol Dragon",
+    [EP2_CLIFFS_OF_GAL_DA_VAL] = "Cliffs of Gal Da Val",
+    [EP2_TEST_SUBJECT_DISPOSAL_AREA] = "Test Subject Disposal Area",
+    [EP2_VR_TEMPLE_FINAL] = "VR Temple Final",
+    [EP2_VR_SPACESHIP_FINAL] = "VR Spaceship Final",
     [EP2_SEASIDE_NIGHT] = "Seaside Night",
-    [EP2_TOWER] = "Tower"
+    [EP2_CONTROL_TOWER] = "Control Tower"
 };
 
 #define NUM_EP4_AREAS 11
