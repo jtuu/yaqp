@@ -17,6 +17,7 @@ void *array_concat(const void *a, size_t an, const void *b, size_t bn, size_t s)
 void print_byte_arr(int arr_len, uint8_t *arr);
 
 void print_wide_str(FILE *file, uint16_t *str);
+void print_wide_str_json_escaped(FILE *file, uint16_t *str);
 
 char* stristr(const char *str1, const char *str2);
 

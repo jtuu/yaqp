@@ -22,7 +22,55 @@ void print_wide_str(FILE *file, uint16_t *str) {
     uint16_t *cur = str;
     do {
         fprintf(file, "%lc", *cur);
-    } while(*(++cur) != 0);
+    } while (*(++cur) != 0);
+}
+
+void print_wide_str_json_escaped(FILE *file, uint16_t *str) {
+    uint16_t *cur = str;
+    do {
+        switch (*cur) {
+        case '"':
+        case '\\':
+            fprintf(file, "\\%lc", *cur);
+            break;
+        case 0x0:
+        case 0x1:
+        case 0x2:
+        case 0x3:
+        case 0x4:
+        case 0x5:
+        case 0x6:
+        case 0x7:
+        case 0x8:
+        case 0x9:
+        case 0xa:
+        case 0xb:
+        case 0xc:
+        case 0xd:
+        case 0xe:
+        case 0xf:
+        case 0x10:
+        case 0x11:
+        case 0x12:
+        case 0x13:
+        case 0x14:
+        case 0x15:
+        case 0x16:
+        case 0x17:
+        case 0x18:
+        case 0x19:
+        case 0x1a:
+        case 0x1b:
+        case 0x1c:
+        case 0x1d:
+        case 0x1e:
+        case 0x1f:
+            fprintf(file, "\\u%04x", *cur);
+            break;
+        default:
+            fprintf(file, "%lc", *cur);
+        }
+    } while (*(++cur) != 0);
 }
 
 char* stristr(const char *str1, const char *str2) {
