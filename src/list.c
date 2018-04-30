@@ -58,6 +58,7 @@ void dispose_nodes(node_t *head) {
         head->next = NULL;
         while (cursor != NULL) {
             tmp = cursor->next;
+            free(cursor->data);
             free(cursor);
             cursor = tmp;
         }

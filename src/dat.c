@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "dat.h"
 #include "utils.h"
@@ -17,20 +18,55 @@ dat_t* parse_dat(unsigned int data_len, uint8_t *data) {
         tbls = (dat_table_t **) realloc(tbls, num_tbls * sizeof(dat_table_t *));
 
         dat_table_t *tbl = malloc(sizeof(dat_table_t));
-        tbl->header = (dat_table_header_t *) cursor;
+        tbl->header = malloc(sizeof(dat_table_header_t));
+        memcpy(tbl->header, cursor, sizeof(dat_table_header_t));
         cursor += DAT_HEADER_SZ;
 
         unsigned int num_items = 0;
 
         switch (tbl->header->type) {
+        case DAT_TYPE_OBJECT:
+            {
+                unsigned int objs_len = tbl->header->table_body_size / DAT_OBJECT_SZ;
+                tbl->body.objects = (dat_object_t **) malloc(objs_len * sizeof(dat_object_t *));
+                for (; num_items < objs_len; num_items++) {
+                    tbl->body.objects[num_items] = malloc(DAT_OBJECT_SZ);
+                    memcpy(tbl->body.objects[num_items], cursor, DAT_OBJECT_SZ);
+                    cursor += DAT_OBJECT_SZ;
+                }
+            }
+            break;
         case DAT_TYPE_NPC:
             {
                 unsigned int npcs_len = tbl->header->table_body_size / DAT_NPC_SZ;
                 tbl->body.npcs = (dat_npc_t **) malloc(npcs_len * sizeof(dat_npc_t *));
                 for (; num_items < npcs_len; num_items++) {
-                    tbl->body.npcs[num_items] = (dat_npc_t *) cursor;
+                    tbl->body.npcs[num_items] = malloc(DAT_NPC_SZ);
+                    memcpy(tbl->body.npcs[num_items], cursor, DAT_NPC_SZ);
                     cursor += DAT_NPC_SZ;
                 }
+            }
+            break;
+        case DAT_TYPE_WAVE:
+            {
+                num_items = 1;
+                tbl->body.waveinfo = malloc(sizeof(dat_waveinfo_t));
+                tbl->body.waveinfo->header = malloc(sizeof(dat_waveinfo_header_t));
+                memcpy(tbl->body.waveinfo->header, cursor, sizeof(dat_waveinfo_header_t));
+                cursor += DAT_WAVEINFO_HEADER_SZ;
+
+                int waves_sz = tbl->body.waveinfo->header->wavecount * DAT_WAVE_SZ;
+                tbl->body.waveinfo->waves = (dat_wave_t **) malloc(tbl->body.waveinfo->header->wavecount * sizeof(dat_wave_t *));
+                for (int i = 0; i < tbl->body.waveinfo->header->wavecount; i++) {
+                    tbl->body.waveinfo->waves[i] = malloc(DAT_WAVE_SZ);
+                    memcpy(tbl->body.waveinfo->waves[i], cursor, DAT_WAVE_SZ);
+                    cursor += DAT_WAVE_SZ;
+                }
+
+                unsigned int events_sz = tbl->header->table_body_size - waves_sz - DAT_WAVEINFO_HEADER_SZ;
+                tbl->body.waveinfo->wave_clear_events = malloc(events_sz);
+                memcpy(tbl->body.waveinfo->wave_clear_events, cursor, events_sz);
+                cursor += events_sz;
             }
             break;
         default:
@@ -94,4 +130,39 @@ void print_dat(dat_t *dat) {
             break;
         }
     }
+}
+
+void dispose_dat(dat_t *dat) {
+    for (unsigned int i = 0; i < dat->num_tables; i++) {
+        dat_table_t *tbl = dat->entity_tables[i];
+        switch (tbl->header->type) {
+        case DAT_TYPE_OBJECT:
+            for (unsigned int j = 0; j < tbl->num_items; j++) {
+                free(tbl->body.objects[j]);
+            }
+            free(tbl->body.objects);
+            break;
+        case DAT_TYPE_NPC:
+            for (unsigned int j = 0; j < tbl->num_items; j++) {
+                free(tbl->body.npcs[j]);
+            }
+            free(tbl->body.npcs);
+            break;
+        case DAT_TYPE_WAVE:
+            for (unsigned int j = 0; j < tbl->body.waveinfo->header->wavecount; j++) {
+                free(tbl->body.waveinfo->waves[j]);
+            }
+            free(tbl->body.waveinfo->waves);
+            free(tbl->body.waveinfo->header);
+            free(tbl->body.waveinfo->wave_clear_events);
+            free(tbl->body.waveinfo);
+            break;
+        default:
+            break;
+        }
+        free(tbl->header);
+        free(tbl);
+    }
+    free(dat->entity_tables);
+    free(dat);
 }

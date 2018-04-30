@@ -13,7 +13,8 @@ qst_t* parse_qst(unsigned int data_len, unsigned char *data) {
     qst_t *qst = malloc(sizeof(qst_t));
 
     for (int i = 0; i < NUM_QST_HEADER; i++) {
-        qst->headers[i] = (qst_header_t *) cursor;
+        qst->headers[i] = malloc(sizeof(qst_header_t));
+        memcpy(qst->headers[i], cursor, sizeof(qst_header_t));
         cursor += QST_HEADER_SZ;
     }
 
@@ -122,19 +123,34 @@ int qst_extract(qst_t *qst, uint8_t **result, int format) {
         return 0;
     }
 
-    unsigned int prs_sz = 0;
-    uint8_t *prs = NULL;
-
-    for(unsigned int i = 0; i < qst->body.num_msgs; i++) {
-        qst_message_t *msg = qst->body.messages[i];
-        char *dot = strrchr((char *)msg->file_name, '.');
+    int prs_sz = 0;
+    for (unsigned int i = 0; i < NUM_QST_HEADER; i++) {
+        qst_header_t *header = qst->headers[i];
+        char *dot = strrchr(header->file_name, '.');
         if (dot && !strcmp(dot, search_ext)) {
-            prs = ARRAY_CONCAT(uint8_t, prs, prs_sz, msg->file_chunk, msg->size);
-            prs_sz += msg->size;
+            prs_sz = header->file_size;
+            break;
+        }
+    }
+
+    uint8_t *prs = malloc(prs_sz);
+    uint8_t *cursor = prs;
+    int chunk_no = 0;
+    for (unsigned int i = 0; i < qst->body.num_msgs; i++) {
+        qst_message_t *msg = qst->body.messages[i];
+        char *dot = strrchr((char *) msg->file_name, '.');
+        if (dot && !strcmp(dot, search_ext)) {
+            if (msg->file_chunk_no != chunk_no++) {
+                fprintf(stderr, "%s chunks out of order\n", search_ext);
+                exit(1);
+            }
+            memcpy(cursor, msg->file_chunk, msg->size);
+            cursor += msg->size;
         }
     }
 
     int ret = pso_prs_decompress_buf(prs, result, prs_sz);
+    free(prs);
 
     if (ret < 0) {
         switch (ret) {
@@ -151,8 +167,19 @@ int qst_extract(qst_t *qst, uint8_t **result, int format) {
             fprintf(stderr, "Unknown error %d", ret);
             break;
         }
-        exit(1);
     }
 
     return ret;
+}
+
+void dispose_qst(qst_t *qst) {
+    for (unsigned int i = 0; i < NUM_QST_HEADER; i++) {
+        free(qst->headers[i]);
+    }
+    for (unsigned int i = 0; i < qst->body.num_msgs; i++) {
+        free(qst->body.messages[i]->file_chunk);
+        free(qst->body.messages[i]);
+    }
+    free(qst->body.messages);
+    free(qst);
 }

@@ -52,4 +52,6 @@ void print_qst(qst_t *qst);
 
 int qst_extract(qst_t *qst, uint8_t **result, int format);
 
+void dispose_qst(qst_t *qst);
+
 #endif

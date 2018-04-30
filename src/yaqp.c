@@ -36,6 +36,7 @@ Contains parts of the Tethealla project.
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <libgen.h>
 
 #include "../lib/include/psoarchive-error.h"
 #include "qst.h"
@@ -485,7 +486,6 @@ node_t* count_monsters(dat_t *dat, int episode) {
             }
         }
     }
-    
     return area_npc_counts;
 }
 
@@ -526,7 +526,7 @@ void print_monster_counts(node_t *area, int episode) {
     }
 }
 
-void print_monster_counts_as_json(bin_t *bin, node_t *area, int episode) {
+void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area, int episode) {
     const char* const *area_names = ep1_area_names;
 
     switch (episode) {
@@ -542,59 +542,101 @@ void print_monster_counts_as_json(bin_t *bin, node_t *area, int episode) {
         break;
     }
 
-    printf("{\n  \"quest_name\": \"");
-    print_wide_str(bin->quest_name);
-    printf("\",\n  \"areas\": [\n");
+    FILE *file = fopen(dest_file_name, "w");
 
-    while (area != NULL) {
-        printf("    {\n      \"area_name\": \"%s\",\n      \"rooms\": [\n", area_names[area->key]);
-        node_t *room = *(node_t **) area->data;
-        
-        while (room != NULL) {
-            printf("        {\n          \"room_id\": %d,\n          \"waves\": [\n", room->key);
-            node_t *wave = sort_nodes(*(node_t **) room->data);
+    if (file) {
+        fprintf(file, "{\n  \"quest_name\": \"");
+        print_wide_str(file, bin->quest_name);
+        fprintf(file, "\",\n  \"areas\": [\n");
+
+        while (area != NULL) {
+            fprintf(file, "    {\n      \"area_name\": \"%s\",\n      \"rooms\": [\n", area_names[area->key]);
+            node_t *room = *(node_t **) area->data;
             
-            while (wave != NULL) {
-                printf("            {\n              \"wave_id\": %d,\n              \"monsters\": [\n", wave->key);
-                node_t *mon = *(node_t **) wave->data;
+            while (room != NULL) {
+                fprintf(file, "        {\n          \"room_id\": %d,\n          \"waves\": [\n", room->key);
+                node_t *wave = sort_nodes(*(node_t **) room->data);
+                
+                while (wave != NULL) {
+                    fprintf(file, "            {\n              \"wave_id\": %d,\n              \"monsters\": [\n", wave->key);
+                    node_t *mon = *(node_t **) wave->data;
 
-                while (mon != NULL) {
-                    printf("                {\n                  \"monster_name\": \"%s\",\n                  \"count\": %d\n                }", get_npc_name(mon->key), *(int *) mon->data);
-                    mon = mon->next;
+                    while (mon != NULL) {
+                        fprintf(file, "                {\n                  \"monster_name\": \"%s\",\n                  \"count\": %d\n                }", get_npc_name(mon->key), *(int *) mon->data);
+                        mon = mon->next;
 
-                    if (mon != NULL) {
-                        printf(",\n");
+                        if (mon != NULL) {
+                            fprintf(file, ",\n");
+                        } else {
+                            fprintf(file, "\n");
+                        }
+                    }
+                    wave = wave->next;
+
+                    if (wave != NULL) {
+                        fprintf(file, "              ]\n            },\n");
                     } else {
-                        printf("\n");
+                        fprintf(file, "              ]\n            }\n");
                     }
                 }
-                wave = wave->next;
+                room = room->next;
 
-                if (wave != NULL) {
-                    printf("              ]\n            },\n");
+                if (room != NULL) {
+                    fprintf(file, "          ]\n        },\n");
                 } else {
-                    printf("              ]\n            }\n");
+                    fprintf(file, "          ]\n        }\n");
                 }
             }
-            room = room->next;
-
-            if (room != NULL) {
-                printf("          ]\n        },\n");
+            
+            area = area->next;
+            
+            if (area != NULL) {
+                fprintf(file, "      ]\n    },\n");
             } else {
-                printf("          ]\n        }\n");
+                fprintf(file, "      ]\n    }\n");
             }
         }
-        
-        area = area->next;
-        
-        if (area != NULL) {
-            printf("      ]\n    },\n");
-        } else {
-            printf("      ]\n    }\n");
-        }
-    }
 
-    printf("  ]\n}\n");
+        fprintf(file, "  ]\n}\n");
+
+        fclose(file);
+    } else {
+        fprintf(stderr, "Failed to open %s\n", dest_file_name);
+    }
+}
+
+void dispose_monster_counts(node_t *area) {
+    node_t *atmp;
+    while (area != NULL) {
+        node_t *r = *(node_t **) area->data;
+        node_t *rtmp;
+        while (r != NULL) {
+            node_t *w = *(node_t **) r->data;
+            node_t *wtmp;
+            while (w != NULL) {
+                node_t *m = *(node_t **) w->data;
+                node_t *mtmp;
+                while (m != NULL) {
+                    mtmp = m->next;
+                    free(m->data);
+                    free(m);
+                    m = mtmp;
+                }
+                wtmp = w->next;
+                free(w->data);
+                free(w);
+                w = wtmp;
+            }
+            rtmp = r->next;
+            free(r->data);
+            free(r);
+            r = rtmp;
+        }
+        atmp = area->next;
+        free(area->data);
+        free(area);
+        area = atmp;
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -602,55 +644,86 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "No input file specified.\n");
         exit(1);
     }
-    char *inp_filename = argv[1];
 
-    unsigned char *file_data = NULL;
-    unsigned int file_sz;
-    size_t read_sz;
-    FILE *file = fopen(inp_filename, "r");
+    for (int i = 1; i < argc; i++) {
+        char *file_name = argv[i];
+        uint8_t *file_data;
+        FILE *file = fopen(file_name, "rb");
+        long file_sz;
 
-    if (file) {
-        fseek(file, 0, SEEK_END);
-        file_sz = ftell(file);
-        rewind(file);
+        if (file) {
+            fseek(file, 0, SEEK_END);
+            file_sz = ftell(file);
+            rewind(file);
 
-        file_data = (unsigned char *) malloc(sizeof(unsigned char) * (file_sz + 1));
-        read_sz = fread(file_data, sizeof(unsigned char), file_sz, file);
-        file_data[file_sz] = '\0';
+            file_data = malloc(file_sz * sizeof(uint8_t));
+            fread(file_data, file_sz, 1, file);
 
-        if (file_sz != read_sz) {
-            free(file_data);
-            file_data = NULL;
-        }
+            fclose(file);
 
-        fclose(file);
-    } else {
-        fprintf(stderr, "Failed to open %s\n", inp_filename);
-        exit(1);
-    }
+            qst_t *qst = parse_qst(file_sz, file_data);
 
-    qst_t *qst = parse_qst(file_sz, file_data);
-    free(file_data);
-
-    uint8_t *dat_data;
-    uint8_t *bin_data;
-    int dat_sz = qst_extract(qst, &dat_data, DAT);
-    int bin_sz = qst_extract(qst, &bin_data, BIN);
-    dat_t *dat = parse_dat(dat_sz, dat_data);
-    bin_t *bin = parse_bin(bin_sz, bin_data);
-    
-    int episode = bin_detect_episode(bin);
-    if (episode == -1) {
-        episode = dat_detect_episode(dat);
-        if (episode == -1) {
-            episode = file_path_detect_episode(inp_filename);
-            if (episode == -1) {
-                fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
-                episode = 1;
+            uint8_t *dat_data;
+            uint8_t *bin_data;
+            int dat_sz = qst_extract(qst, &dat_data, DAT);
+            int bin_sz = qst_extract(qst, &bin_data, BIN);
+            if (dat_sz <= 0 || bin_sz <= 0) {
+                free(file_data);
+                dispose_qst(qst);
+                fprintf(stderr, "Failed to parse %s, skipping\n", file_name);
+                continue;
             }
+            dat_t *dat = parse_dat(dat_sz, dat_data);
+            bin_t *bin = parse_bin(bin_sz, bin_data);
+            
+            int episode = bin_detect_episode(bin);
+            if (episode == -1) {
+                episode = dat_detect_episode(dat);
+                if (episode == -1) {
+                    episode = file_path_detect_episode(file_name);
+                    if (episode == -1) {
+                        fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
+                        episode = 1;
+                    }
+                }
+            }
+
+            node_t *monster_counts = count_monsters(dat, episode);
+
+            const int dest_ext_len = 5;
+            const char *dest_ext = ".json";
+            char *dest_file_name = malloc(strlen(file_name) + dest_ext_len + 1);
+            strcpy(dest_file_name, file_name);
+            char *sep = strrchr(dest_file_name, '/');
+            char *dot = strrchr(dest_file_name, '.');
+
+            if (dot != NULL) {
+                if (sep != NULL) {
+                    if (sep < dot) {
+                        strcpy(dot, dest_ext);
+                        *(dot + dest_ext_len) = '\0';
+                    }
+                } else {
+                    strcpy(dot, dest_ext);
+                    *(dot + dest_ext_len) = '\0';
+                }
+            } else {
+                strcat(dest_file_name, dest_ext);
+            }
+
+            write_monster_counts_as_json(dest_file_name, bin, monster_counts, episode);
+            printf("%s\n", dest_file_name);
+
+            free(dest_file_name);
+            dispose_monster_counts(monster_counts);
+            free(dat_data);
+            free(bin_data);
+            free(file_data);
+            dispose_dat(dat);
+            dispose_bin(bin);
+            dispose_qst(qst);
+        } else {
+            fprintf(stderr, "Failed to open %s\n", file_name);
         }
     }
-
-    node_t *area = count_monsters(dat, episode);
-    print_monster_counts_as_json(bin, area, episode);
 }

@@ -18,10 +18,10 @@ void print_byte_arr(int arr_len, uint8_t *arr) {
     printf("]\n");
 }
 
-void print_wide_str(uint16_t *str) {
+void print_wide_str(FILE *file, uint16_t *str) {
     uint16_t *cur = str;
     do {
-        printf("%lc", *cur);
+        fprintf(file, "%lc", *cur);
     } while(*(++cur) != 0);
 }
 

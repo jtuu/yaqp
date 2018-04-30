@@ -9,6 +9,8 @@
 #define DAT_NPC_UNKNOWN2_SZ 2
 #define DAT_NPC_UNKNOWN3_SZ 4
 #define DAT_NPC_UNKNOWN8_SZ 8
+#define DAT_WAVEINFO_HEADER_SZ 16
+#define DAT_WAVE_SZ 20
 #define DAT_TYPE_OBJECT 1
 #define DAT_TYPE_NPC 2
 #define DAT_TYPE_WAVE 3
@@ -64,6 +66,13 @@ typedef struct dat_npc {
    uint32_t unknown10;
 } dat_npc_t;
 
+typedef struct dat_waveinfo_header {
+    uint32_t wavesize;
+    uint32_t x10000000; // unknown, 10 00 00 00
+    uint32_t wavecount;
+    uint32_t zero; // unknown, 00 00 00 00
+} dat_waveinfo_header_t;
+
 typedef struct dat_wave {
     uint32_t wave_id;
     uint32_t x00000100; // unknown, 00 00 01 00
@@ -74,13 +83,19 @@ typedef struct dat_wave {
     uint32_t wave_clear_event_index; // index into wave clear event block
 } dat_wave_t;
 
+typedef struct dat_waveinfo {
+    dat_waveinfo_header_t *header;
+    dat_wave_t **waves;
+    uint8_t *wave_clear_events;
+} dat_waveinfo_t;
+
 typedef struct dat_table {
     dat_table_header_t *header;
     unsigned int num_items;
     union body {
         dat_object_t **objects;
         dat_npc_t **npcs;
-        dat_wave_t **waves;
+        dat_waveinfo_t *waveinfo;
     } body;
 } dat_table_t;
 
@@ -92,5 +107,7 @@ typedef struct dat {
 dat_t* parse_dat(unsigned int data_len, uint8_t *data);
 
 void print_dat(dat_t *dat);
+
+void dispose_dat(dat_t *dat);
 
 #endif

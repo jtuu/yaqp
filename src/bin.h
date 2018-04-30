@@ -20,4 +20,6 @@ typedef struct bin {
 
 bin_t* parse_bin(unsigned int data_len, uint8_t *data);
 
+void dispose_bin(bin_t *bin);
+
 #endif

@@ -1,19 +1,5 @@
 #!/bin/bash
 
 input_dir=$1
-
-while read -r f; do
-    dir=$(dirname "$f")
-    out=$(./bin/yaqp "$f")
-    ret=$?
-    if [ $ret -ne 0 ]; then
-        echo "$f"
-    fi
-
-    q_name=$(head -n1 <(echo "$out"))
-    if ! [[ -z "$q_name" ]]; then
-        q_counts=$(tail -n+2 <(echo "$out"))
-        out_file="$dir/${q_name//\//_}.yaqp"
-        echo "$q_counts" > "$out_file"
-    fi
-done < <(find "$input_dir" -name \*_j.qst -prune -o -name \*.qst -print)
+mapfile -t files < <(find "$input_dir" -name \*.qst -print)
+./bin/yaqp "${files[@]}"
