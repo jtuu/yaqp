@@ -594,19 +594,39 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
         fprintf(file, "\",\n  \"areas\": [\n");
 
         while (area != NULL) {
-            fprintf(file, "    {\n      \"area_name\": \"%s\",\n      \"rooms\": [\n", area_names[area->key]);
+            fprintf(file,
+                "    {\n"
+                "      \"area_name\": \"%s\",\n"
+                "      \"rooms\": [\n",
+                area_names[area->key]);
             node_t *room = *(node_t **) area->data;
             
             while (room != NULL) {
-                fprintf(file, "        {\n          \"room_id\": %d,\n          \"waves\": [\n", room->key);
+                fprintf(file,
+                    "        {\n"
+                    "          \"room_id\": %d,\n"
+                    "          \"waves\": [\n",
+                    room->key);
                 node_t *wave = sort_nodes(*(node_t **) room->data);
                 
                 while (wave != NULL) {
-                    fprintf(file, "            {\n              \"wave_id\": %d,\n              \"monsters\": [\n", wave->key);
+                    fprintf(file,
+                        "            {\n"
+                        "              \"wave_id\": %d,\n"
+                        "              \"monsters\": [\n",
+                        wave->key);
                     node_t *mon = *(node_t **) wave->data;
 
                     while (mon != NULL) {
-                        fprintf(file, "                {\n                  \"monster_name\": \"%s\",\n                  \"bp_id\": %d,\n                  \"count\": %d\n                }", get_npc_name(mon->key), get_mon_bp_id(mon->key, episode, area->key), *(int *) mon->data);
+                        fprintf(file,
+                            "                {\n"
+                            "                  \"monster_name\": \"%s\",\n"
+                            "                  \"bp_id\": %d,\n"
+                            "                  \"count\": %d\n"
+                            "                }",
+                            get_npc_name(mon->key),
+                            get_mon_bp_id(mon->key, episode, area->key),
+                            *(int *) mon->data);
                         mon = mon->next;
 
                         if (mon != NULL) {
@@ -618,26 +638,37 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
                     wave = wave->next;
 
                     if (wave != NULL) {
-                        fprintf(file, "              ]\n            },\n");
+                        fprintf(file,
+                            "              ]\n"
+                            "            },\n");
                     } else {
-                        fprintf(file, "              ]\n            }\n");
+                        fprintf(file, "              ]\n"
+                            "            }\n");
                     }
                 }
                 room = room->next;
 
                 if (room != NULL) {
-                    fprintf(file, "          ]\n        },\n");
+                    fprintf(file,
+                        "          ]\n"
+                        "        },\n");
                 } else {
-                    fprintf(file, "          ]\n        }\n");
+                    fprintf(file,
+                        "          ]\n"
+                        "        }\n");
                 }
             }
             
             area = area->next;
             
             if (area != NULL) {
-                fprintf(file, "      ]\n    },\n");
+                fprintf(file,
+                    "      ]\n"
+                    "    },\n");
             } else {
-                fprintf(file, "      ]\n    }\n");
+                fprintf(file,
+                    "      ]\n"
+                    "    }\n");
             }
         }
 
