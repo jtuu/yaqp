@@ -45,6 +45,7 @@ Contains parts of the Tethealla project.
 #include "list.h"
 #include "mon.h"
 #include "areas.h"
+#include "bp.h"
 
 typedef enum {
     BREED_BEAR = 64,
@@ -282,6 +283,45 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     default:
         return MON_IGNORE;
     }
+}
+
+int get_mon_bp_id(mon_kind kind, int episode, int area) {
+    mon_kind *ids;
+    int ids_len;
+
+    switch (episode) {
+    case 1:
+        ids = ep1_bp_ids;
+        ids_len = NUM_EP1_BP;
+        break;
+    case 2:
+        ids = ep2_bp_ids;
+        ids_len = NUM_EP2_BP;
+        break;
+    case 4:
+        ids = ep4_bp_ids;
+        ids_len = NUM_EP4_BP;
+        break;
+    default:
+        fprintf(stderr, "Invalid episode %d passed to get_mon_bp_id\n", episode);
+        return -1;
+    }
+
+    if (episode == 4 && area >= EP4_SUBTERRANEAN_DESERT_1) {
+        for (int i = ids_len - 1; i >= 0; i--) {
+            if (ids[i] == kind) {
+                return i;
+            }
+        }
+    } else {
+        for (int i = 0; i < ids_len; i++) {
+            if (ids[i] == kind) {
+                return i;
+            }
+        }
+    }
+
+    return -1;
 }
 
 char* get_npc_name(int type) {
@@ -566,7 +606,7 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
                     node_t *mon = *(node_t **) wave->data;
 
                     while (mon != NULL) {
-                        fprintf(file, "                {\n                  \"monster_name\": \"%s\",\n                  \"count\": %d\n                }", get_npc_name(mon->key), *(int *) mon->data);
+                        fprintf(file, "                {\n                  \"monster_name\": \"%s\",\n                  \"bp_id\": %d,\n                  \"count\": %d\n                }", get_npc_name(mon->key), get_mon_bp_id(mon->key, episode, area->key), *(int *) mon->data);
                         mon = mon->next;
 
                         if (mon != NULL) {
