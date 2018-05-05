@@ -587,6 +587,7 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
         fprintf(file, "{\n  \"quest_name\": \"");
         print_wide_str_json_escaped(file, bin->quest_name);
         fprintf(file, "\",\n  \"episode\": %d,\n", episode);
+        fprintf(file, "  \"quest_id\": %d,\n", bin->quest_number);
         fprintf(file, "  \"short_description\": \"");
         print_wide_str_json_escaped(file, bin->short_description);
         fprintf(file, "\", \n  \"long_description\": \"");
