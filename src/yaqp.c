@@ -415,13 +415,16 @@ int dat_detect_episode(dat_t *dat) {
     return -1;
 }
 
+#define OPCODE_SET_EPISODE_TABLE 0xf8
+#define OPCODE_SET_EPISODE 0xbc
+
 int bin_detect_episode(bin_t *bin) {
     int obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
     for (int i = 0; i < obj_code_len - 2; i++) {
         uint8_t a = bin->object_code[i];
         uint8_t b = bin->object_code[i + 1];
         uint8_t c = bin->object_code[i + 2];
-        if (a == 0xf8 && b == 0xbc) {
+        if (a == OPCODE_SET_EPISODE_TABLE && b == OPCODE_SET_EPISODE) {
             switch (c) {
             case 0:
                 return 1;
