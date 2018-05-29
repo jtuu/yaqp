@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 
 void *array_concat(const void *a, size_t an, const void *b, size_t bn, size_t s) {
     char *p = malloc(s * (an + bn));
@@ -11,9 +12,9 @@ void *array_concat(const void *a, size_t an, const void *b, size_t bn, size_t s)
 }
 
 void print_byte_arr(int arr_len, uint8_t *arr) {
-    printf("[%d", arr[0]);
+    printf("[%02hhx", arr[0]);
     for (int i = 1; i < arr_len; i++) {
-        printf(", %d", arr[i]);
+        printf(", %02hhx", arr[i]);
     }
     printf("]\n");
 }

@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define FLOAT_MASK 0x800000
+
 #define DAT_HEADER_SZ 16
 #define DAT_OBJECT_SZ 68
 #define DAT_NPC_SZ 72
@@ -37,10 +39,11 @@ typedef struct dat_object {
    uint32_t x_rotation;
    uint32_t y_rotation;
    uint32_t z_rotation;
-   uint8_t unknown4[6];
-   uint32_t object_id;
-   uint32_t action;
-   uint8_t unknown5[14];
+   uint32_t full_random;
+   uint32_t random_item;
+   uint32_t fixed_item;
+   uint8_t item_param[4];
+   uint8_t unknown4[16];
 } dat_object_t;
 
 typedef struct dat_npc {

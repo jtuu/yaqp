@@ -2,6 +2,8 @@
 #define YAQP_UTILS_H
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #define LE16(x) *(x) | (uint16_t) *(x + 1) << 8
 #define LE32(x) *(x) | (uint32_t) *(x + 1) << 8 | (uint32_t) *(x + 2) << 16 | (uint32_t) *(x + 3) << 24

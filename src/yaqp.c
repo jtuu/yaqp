@@ -46,6 +46,7 @@ Contains parts of the Tethealla project.
 #include "mon.h"
 #include "areas.h"
 #include "bp.h"
+#include "obj.h"
 
 typedef enum {
     BREED_BEAR = 64,
@@ -116,8 +117,6 @@ typedef enum {
     BREED_SNAKE = 281
 } mon_breed;
 
-#define NPC_MASK 0x800000
-
 #define BREED_1TO1_MAP_(name) case BREED_##name: return MON_##name
 #define BREED_1TO1_MAP(name) BREED_1TO1_MAP_(name)
 
@@ -146,7 +145,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
         return episode == 4 ? (npc->skin & 0x01 ? MON_DEL_RAPPY : MON_SAND_RAPPY) :
             (npc->skin & 0x01 ? (episode == 2 ? MON_LOVE_RAPPY : MON_AL_RAPPY) : MON_RAG_RAPPY);
     case BREED_WOLF:
-        return npc->flags & NPC_MASK ? MON_BARBAROUS_WOLF : MON_SAVAGE_WOLF;
+        return npc->flags & FLOAT_MASK ? MON_BARBAROUS_WOLF : MON_SAVAGE_WOLF;
     case BREED_BOOMA:
         switch (npc->skin) {
         case 0:
@@ -176,13 +175,13 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
             return MON_UNKNOWN;
         }
     case BREED_SLIME:
-        return npc->flags & NPC_MASK ? MON_POUILLY_SLIME : MON_POFUILLY_SLIME;
+        return npc->flags & FLOAT_MASK ? MON_POUILLY_SLIME : MON_POFUILLY_SLIME;
     BREED_1TO1_MAP(PAN_ARMS);
     case BREED_CHIC:
         return npc->skin & 0x01 ? MON_GILLCHIC : MON_DUBCHIC;
     BREED_1TO1_MAP(GARANZ);
     case BREED_SINOW_NINJA:
-        return npc->flags & NPC_MASK ? MON_SINOW_GOLD : MON_SINOW_BEAT;
+        return npc->flags & FLOAT_MASK ? MON_SINOW_GOLD : MON_SINOW_BEAT;
     BREED_1TO1_MAP(CANADINE);
     BREED_1TO1_MAP(CANANE);
     BREED_1TO1_MAP(DUBWITCH);
@@ -247,7 +246,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     BREED_1TO1_MAP(ILL_GILL);
     BREED_1TO1_MAP(ASTARK);
     case BREED_LIZARD:
-        return npc->flags & NPC_MASK ? MON_YOWIE : MON_SATELLITE_LIZARD;
+        return npc->flags & FLOAT_MASK ? MON_YOWIE : MON_SATELLITE_LIZARD;
     case BREED_MERISSA:
         return npc->skin & 0x01 ? MON_MERISSA_AA : MON_MERISSA_A;
     BREED_1TO1_MAP(GIRTABLULU);
@@ -278,7 +277,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
             return MON_UNKNOWN;
         }
     case BREED_SNAKE:
-        return npc->flags & NPC_MASK ? MON_KONDRIEU :
+        return npc->flags & FLOAT_MASK ? MON_KONDRIEU :
             (npc->skin & 0x01 ? MON_SHAMBERTIN : MON_SAINT_MILION);
     default:
         return MON_IGNORE;
@@ -333,6 +332,8 @@ char* get_npc_name(int type) {
     snprintf(str, 16, "Unknown %d", type);
     return str;
 }
+
+
 
 int file_path_detect_episode(char *path) {
     char *txt_match = stristr(path, "episode");
@@ -442,90 +443,151 @@ const long null = 0;
 const int one = 1;
 const int eight = 8;
 
+#define BOXES -8035
+
 node_t* count_monsters(dat_t *dat, int episode) {
     node_t *area_npc_counts = NULL;
 
     for (int i = dat->num_tables - 1; i >= 0; i--) {
         dat_table_t *tbl = dat->entity_tables[i];
         int area = tbl->header->area;
-        if (tbl->header->type != DAT_TYPE_NPC || area == 0) {
+        if (area == 0) {
             continue;
         }
 
-        node_t *area_node = find_node(area_npc_counts, area);
-        node_t *rooms = NULL;
-        if (area_node != NULL) {
-            rooms = *(node_t **) area_node->data;
-        } else {
-            area_npc_counts = prepend_node(area_npc_counts, area, sizeof(node_t *), &null);
-            area_node = area_npc_counts;
-        }
+        switch (tbl->header->type) {
+        case DAT_TYPE_NPC:
+            {
+                node_t *area_node = find_node(area_npc_counts, area);
+                node_t *rooms = NULL;
+                if (area_node != NULL) {
+                    rooms = *(node_t **) area_node->data;
+                } else {
+                    area_npc_counts = prepend_node(area_npc_counts, area, sizeof(node_t *), &null);
+                    area_node = area_npc_counts;
+                }
 
-        for (unsigned int j = 0; j < tbl->num_items; j++) {
-            dat_npc_t *npc = tbl->body.npcs[j];
-            int kind = get_npc_kind(npc, episode, area);
-            if (kind == MON_IGNORE) {
-                continue;
-            }
+                for (unsigned int j = 0; j < tbl->num_items; j++) {
+                    dat_npc_t *npc = tbl->body.npcs[j];
+                    int kind = get_npc_kind(npc, episode, area);
+                    if (kind == MON_IGNORE) {
+                        continue;
+                    }
 
-            node_t *room_node = find_node(rooms, npc->section);
-            node_t *waves = NULL;
-            if (room_node != NULL) {
-                waves = *(node_t **) room_node->data;
-            } else {
-                room_node = prepend_node(rooms, npc->section, sizeof(node_t *), &null);
-                rooms = room_node;
-                node_t **ptr = area_node->data;
-                *ptr = rooms;
-            }
-
-            node_t *wave_node = find_node(waves, npc->wave_id);
-            node_t *npc_counts = NULL;
-            if (wave_node != NULL) {
-                npc_counts = *(node_t **) wave_node->data;
-            } else {
-                wave_node = prepend_node(waves, npc->wave_id, sizeof(node_t *), &null);
-                waves = wave_node;
-                node_t **ptr = room_node->data;
-                *ptr = waves;
-            }
-            
-            node_t *count_node = find_node(npc_counts, kind);
-            if (count_node != NULL) {
-                (*(int *) count_node->data)++;
-            } else {
-                npc_counts = prepend_node(npc_counts, kind, sizeof(int), &one);
-                node_t **ptr = wave_node->data;
-                *ptr = npc_counts;
-            }
-            
-            switch (kind) {
-            case MON_CANANE:
-                {
-                    node_t *canadine_node = find_node(npc_counts, MON_CANADINE);
-                    if (canadine_node != NULL) {
-                        (*(int *) canadine_node->data) += 8;
+                    node_t *room_node = find_node(rooms, npc->section);
+                    node_t *waves = NULL;
+                    if (room_node != NULL) {
+                        waves = *(node_t **) room_node->data;
                     } else {
-                        npc_counts = prepend_node(npc_counts, MON_CANADINE, sizeof(int), &eight);
+                        room_node = prepend_node(rooms, npc->section, sizeof(node_t *), &null);
+                        rooms = room_node;
+                        node_t **ptr = area_node->data;
+                        *ptr = rooms;
+                    }
+
+                    node_t *wave_node = find_node(waves, npc->wave_id);
+                    node_t *npc_counts = NULL;
+                    if (wave_node != NULL) {
+                        npc_counts = *(node_t **) wave_node->data;
+                    } else {
+                        wave_node = prepend_node(waves, npc->wave_id, sizeof(node_t *), &null);
+                        waves = wave_node;
+                        node_t **ptr = room_node->data;
+                        *ptr = waves;
+                    }
+                    
+                    node_t *count_node = find_node(npc_counts, kind);
+                    if (count_node != NULL) {
+                        (*(int *) count_node->data)++;
+                    } else {
+                        npc_counts = prepend_node(npc_counts, kind, sizeof(int), &one);
                         node_t **ptr = wave_node->data;
                         *ptr = npc_counts;
                     }
-                }
-                break;
-            case MON_RECOBOX:
-                {
-                    node_t *recon_node = find_node(npc_counts, MON_RECON);
-                    int clone_count = npc->clone_count;
-                    if (recon_node != NULL) {
-                        (*(int *) recon_node->data) += clone_count;
-                    } else {
-                        npc_counts = prepend_node(npc_counts, MON_RECON, sizeof(int), &clone_count);
-                        node_t **ptr = wave_node->data;
-                        *ptr = npc_counts;
+                    
+                    switch (kind) {
+                    case MON_CANANE:
+                        {
+                            node_t *canadine_node = find_node(npc_counts, MON_CANADINE);
+                            if (canadine_node != NULL) {
+                                (*(int *) canadine_node->data) += 8;
+                            } else {
+                                npc_counts = prepend_node(npc_counts, MON_CANADINE, sizeof(int), &eight);
+                                node_t **ptr = wave_node->data;
+                                *ptr = npc_counts;
+                            }
+                        }
+                        break;
+                    case MON_RECOBOX:
+                        {
+                            node_t *recon_node = find_node(npc_counts, MON_RECON);
+                            int clone_count = npc->clone_count;
+                            if (recon_node != NULL) {
+                                (*(int *) recon_node->data) += clone_count;
+                            } else {
+                                npc_counts = prepend_node(npc_counts, MON_RECON, sizeof(int), &clone_count);
+                                node_t **ptr = wave_node->data;
+                                *ptr = npc_counts;
+                            }
+                        }
+                        break;
                     }
                 }
-                break;
             }
+            break;
+        case DAT_TYPE_OBJECT:
+            {
+                node_t *area_node = find_node(area_npc_counts, area);
+                node_t *rooms = NULL;
+                if (area_node != NULL) {
+                    rooms = *(node_t **) area_node->data;
+                } else {
+                    area_npc_counts = prepend_node(area_npc_counts, area, sizeof(node_t *), &null);
+                    area_node = area_npc_counts;
+                }
+
+                for (unsigned int j = 0; j < tbl->num_items; j++) {
+                    dat_object_t *obj = tbl->body.objects[j];
+                    int kind = get_obj_kind(obj);
+                    if (kind == OBJ_IGNORE) {
+                        continue;
+                    }
+
+                    node_t *room_node = find_node(rooms, obj->section);
+                    node_t *waves = NULL;
+                    if (room_node != NULL) {
+                        waves = *(node_t **) room_node->data;
+                    } else {
+                        room_node = prepend_node(rooms, obj->section, sizeof(node_t *), &null);
+                        rooms = room_node;
+                        node_t **ptr = area_node->data;
+                        *ptr = rooms;
+                    }
+
+                    node_t *wave_node = find_node(waves, BOXES);
+                    node_t *box_counts = NULL;
+                    if (wave_node != NULL) {
+                        box_counts = *(node_t **) wave_node->data;
+                    } else {
+                        wave_node = prepend_node(waves, BOXES, sizeof(node_t *), &null);
+                        waves = wave_node;
+                        node_t **ptr = room_node->data;
+                        *ptr = waves;
+                    }
+                    
+                    node_t *count_node = find_node(box_counts, kind);
+                    if (count_node != NULL) {
+                        (*(int *) count_node->data)++;
+                    } else {
+                        box_counts = prepend_node(box_counts, kind, sizeof(int), &one);
+                        node_t **ptr = wave_node->data;
+                        *ptr = box_counts;
+                    }
+                }
+            }
+            break;
+        default:
+            break;
         }
     }
     return area_npc_counts;
@@ -605,6 +667,7 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
                 area_names[area->key]);
             node_t *room = *(node_t **) area->data;
             
+            node_t *boxes = NULL;
             while (room != NULL) {
                 fprintf(file,
                     "        {\n"
@@ -614,52 +677,80 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
                 node_t *wave = sort_nodes(*(node_t **) room->data);
                 
                 while (wave != NULL) {
-                    fprintf(file,
-                        "            {\n"
-                        "              \"wave_id\": %d,\n"
-                        "              \"monsters\": [\n",
-                        wave->key);
-                    node_t *mon = *(node_t **) wave->data;
-
-                    while (mon != NULL) {
-                        fprintf(file,
-                            "                {\n"
-                            "                  \"monster_name\": \"%s\",\n"
-                            "                  \"bp_id\": %d,\n"
-                            "                  \"count\": %d\n"
-                            "                }",
-                            get_npc_name(mon->key),
-                            get_mon_bp_id(mon->key, episode, area->key),
-                            *(int *) mon->data);
-                        mon = mon->next;
-
-                        if (mon != NULL) {
-                            fprintf(file, ",\n");
-                        } else {
-                            fprintf(file, "\n");
-                        }
-                    }
-                    wave = wave->next;
-
-                    if (wave != NULL) {
-                        fprintf(file,
-                            "              ]\n"
-                            "            },\n");
+                    if (wave->key == BOXES) {
+                        boxes = *(node_t **) wave->data;
+                        wave = wave->next;
                     } else {
-                        fprintf(file, "              ]\n"
-                            "            }\n");
+                        fprintf(file,
+                            "            {\n"
+                            "              \"wave_id\": %d,\n"
+                            "              \"monsters\": [\n",
+                            wave->key);
+                        node_t *mon = *(node_t **) wave->data;
+
+                        while (mon != NULL) {
+                            fprintf(file,
+                                "                {\n"
+                                "                  \"monster_name\": \"%s\",\n"
+                                "                  \"bp_id\": %d,\n"
+                                "                  \"count\": %d\n"
+                                "                }",
+                                get_npc_name(mon->key),
+                                get_mon_bp_id(mon->key, episode, area->key),
+                                *(int *) mon->data);
+                            mon = mon->next;
+
+                            if (mon != NULL) {
+                                fprintf(file, ",\n");
+                            } else {
+                                fprintf(file, "\n");
+                            }
+                        }
+                        wave = wave->next;
+
+                        if (wave != NULL) {
+                            fprintf(file,
+                                "              ]\n"
+                                "            },\n");
+                        } else {
+                            fprintf(file, "              ]\n"
+                                "            }\n");
+                        }
                     }
                 }
                 room = room->next;
 
+                fprintf(file,
+                        "          ],\n"
+                        "          \"boxes\": [\n");
+
+                while (boxes != NULL) {
+                    fprintf(file,
+                        "            {\n"
+                        "              \"box_name\": \"%s\",\n"
+                        "              \"count\": %d\n",
+                        get_obj_name(boxes->key),
+                        *(int *) boxes->data);
+
+                    boxes = boxes->next;
+
+                    if (boxes != NULL) {
+                        fprintf(file, 
+                            "            },\n");
+                    } else {
+                        fprintf(file, 
+                            "            }\n");
+                    }
+                }
+
                 if (room != NULL) {
                     fprintf(file,
-                        "          ]\n"
-                        "        },\n");
+                                "          ]\n"
+                                "        },\n");
                 } else {
                     fprintf(file,
-                        "          ]\n"
-                        "        }\n");
+                                "          ]\n"
+                                "        }\n");
                 }
             }
             
