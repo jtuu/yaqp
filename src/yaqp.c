@@ -147,7 +147,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     case BREED_WOLF:
         return npc->flags & FLOAT_MASK ? MON_BARBAROUS_WOLF : MON_SAVAGE_WOLF;
     case BREED_BOOMA:
-        switch (npc->skin) {
+        switch (npc->skin % 3) {
         case 0:
             return MON_BOOMA;
         case 1:
@@ -164,7 +164,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
             (npc->skin & 0x01 ? MON_NAR_LILY : MON_POISON_LILY);
     BREED_1TO1_MAP(NANO_DRAGON);
     case BREED_SHARK:
-        switch (npc->skin) {
+        switch (npc->skin % 3) {
         case 0:
             return MON_EVIL_SHARK;
         case 1:
@@ -192,7 +192,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     BREED_1TO1_MAP(CHAOS_BRINGER);
     BREED_1TO1_MAP(DARK_BELRA);
     case BREED_DIMENIAN:
-        switch (npc->skin) {
+        switch (npc->skin % 3) {
         case 0:
             return MON_DIMENIAN;
         case 1:
@@ -253,7 +253,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     case BREED_ZU:
         return npc->skin & 0x01 ? MON_PAZUZU : MON_ZU;
     case BREED_BOOTA:
-        switch (npc->skin) {
+        switch (npc->skin % 3) {
         case 0:
             return MON_BOOTA;
         case 1:
@@ -266,7 +266,7 @@ int get_npc_kind(dat_npc_t *npc, int episode, int area) {
     case BREED_DORPHON:
         return npc->skin & 0x01 ? MON_DORPHON_ECLAIR : MON_DORPHON;
     case BREED_GORAN:
-        switch (npc->skin) {
+        switch (npc->skin % 3) {
         case 0:
             return MON_GORAN;
         case 1:
