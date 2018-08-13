@@ -36,6 +36,8 @@ Contains parts of the Tethealla project.
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <wchar.h>
+#include <locale.h>
 
 #include "../lib/include/psoarchive-error.h"
 #include "qst.h"
@@ -814,6 +816,8 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "No input file specified.\n");
         exit(1);
     }
+    
+    setlocale(LC_ALL, "");
 
     for (int i = 1; i < argc; i++) {
         char *file_name = argv[i];
