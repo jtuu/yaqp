@@ -421,6 +421,9 @@ int dat_detect_episode(dat_t *dat) {
 #define OPCODE_SET_EPISODE_TABLE 0xf8
 #define OPCODE_SET_EPISODE 0xbc
 
+#define OPCODE_BB_MAP_DESIGNATE_TABLE 0xf9
+#define OPCODE_BB_MAP_DESIGNATE 0x51
+
 int bin_detect_episode(bin_t *bin) {
     int obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
     for (int i = 0; i < obj_code_len - 2; i++) {
@@ -439,6 +442,26 @@ int bin_detect_episode(bin_t *bin) {
         }
     }
     return -1;
+}
+
+#define NUM_AREAS 18
+#define NUM_MAPS 45
+
+int* bin_get_map_ids(bin_t *bin) {
+    int obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
+    int *map_ids = malloc(NUM_AREAS * sizeof(int));
+    for (int i = 0; i < NUM_AREAS; i++) { map_ids[i] = -1; }
+    
+    for (int i = 0; i < obj_code_len - 2; i++) {
+        uint8_t a = bin->object_code[i];
+        uint8_t b = bin->object_code[i + 1];
+        if (a == OPCODE_BB_MAP_DESIGNATE_TABLE && b == OPCODE_BB_MAP_DESIGNATE) {
+            uint8_t area_id = bin->object_code[i + 2];
+            uint8_t map_id = bin->object_code[i + 3];
+            map_ids[area_id] = (int) map_id;
+        }
+    }
+    return map_ids;
 }
 
 const long null = 0;
@@ -633,23 +656,45 @@ void print_monster_counts(node_t *area, int episode) {
 }
 
 void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area, int episode) {
+    int area_name_offset = 0;
     const char* const *area_names = ep1_area_names;
 
     switch (episode) {
     default:
     case 1:
         area_names = ep1_area_names;
+        area_name_offset = 0;
         break;
     case 2:
         area_names = ep2_area_names;
+        area_name_offset = 18;
         break;
     case 4:
         area_names = ep4_area_names;
+        area_name_offset = 35;
         break;
     }
 
-    FILE *file = fopen(dest_file_name, "w");
+    int *map_ids = bin_get_map_ids(bin);
+    int cur_area_counts[NUM_MAPS];
+    int max_area_counts[NUM_MAPS];
+    for (int i = 0; i < NUM_MAPS; i++) {
+        cur_area_counts[i] = 1;
+        max_area_counts[i] = 0;
+    }
 
+    node_t *a = area;
+    while (a != NULL) {
+        int map_id = map_ids[a->key];
+        if (map_id > -1) {
+            max_area_counts[map_id]++;
+        } else {
+            map_ids[a->key] = a->key + area_name_offset;
+        }
+        a = a->next;
+    }
+
+    FILE *file = fopen(dest_file_name, "w");
     if (file) {
         fprintf(file, "{\n  \"quest_name\": \"");
         print_wide_str_json_escaped(file, bin->quest_name);
@@ -662,13 +707,21 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
         fprintf(file, "\",\n  \"areas\": [\n");
 
         while (area != NULL) {
-            fprintf(file,
-                "    {\n"
-                "      \"area_name\": \"%s\",\n"
-                "      \"rooms\": [\n",
-                area_names[area->key]);
+            int map_id = map_ids[area->key];
+            int cur_area_count = cur_area_counts[map_id];
+            int max_area_count = max_area_counts[map_id];
+            map_id -= area_name_offset;
+            cur_area_counts[map_id]++;
+
+            fprintf(file, "    {\n");
+            if (max_area_count > 1) {
+                fprintf(file, "      \"area_name\": \"%s (%d/%d)\",\n", area_names[map_id], cur_area_count, max_area_count);
+            } else {
+                fprintf(file, "      \"area_name\": \"%s\",\n", area_names[map_id]);
+            }
+            fprintf(file, "      \"rooms\": [\n");
+
             node_t *room = *(node_t **) area->data;
-            
             node_t *boxes = NULL;
             while (room != NULL) {
                 fprintf(file,
@@ -775,6 +828,8 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
     } else {
         fprintf(stderr, "Failed to open %s\n", dest_file_name);
     }
+
+    free(map_ids);
 }
 
 void dispose_monster_counts(node_t *area) {
