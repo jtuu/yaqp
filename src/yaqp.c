@@ -710,8 +710,8 @@ void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area
             int map_id = map_ids[area->key];
             int cur_area_count = cur_area_counts[map_id];
             int max_area_count = max_area_counts[map_id];
-            map_id -= area_name_offset;
             cur_area_counts[map_id]++;
+            map_id -= area_name_offset;
 
             fprintf(file, "    {\n");
             if (max_area_count > 1) {
