@@ -13,7 +13,7 @@ dat_t* parse_dat(size_t data_len, uint8_t *data) {
     unsigned int num_tbls = 0;
     dat_table_t **tbls = (dat_table_t **) malloc(num_tbls * sizeof(dat_table_t *));
 
-    while (cursor - data < data_len) {
+    while ((unsigned int) (cursor - data) < data_len) {
         num_tbls++;
         tbls = (dat_table_t **) realloc(tbls, num_tbls * sizeof(dat_table_t *));
 
@@ -55,9 +55,9 @@ dat_t* parse_dat(size_t data_len, uint8_t *data) {
                 memcpy(tbl->body.waveinfo->header, cursor, sizeof(dat_waveinfo_header_t));
                 cursor += DAT_WAVEINFO_HEADER_SZ;
 
-                int waves_sz = tbl->body.waveinfo->header->wavecount * DAT_WAVE_SZ;
+                uint32_t waves_sz = tbl->body.waveinfo->header->wavecount * DAT_WAVE_SZ;
                 tbl->body.waveinfo->waves = (dat_wave_t **) malloc(tbl->body.waveinfo->header->wavecount * sizeof(dat_wave_t *));
-                for (int i = 0; i < tbl->body.waveinfo->header->wavecount; i++) {
+                for (unsigned int i = 0; i < tbl->body.waveinfo->header->wavecount; i++) {
                     tbl->body.waveinfo->waves[i] = malloc(DAT_WAVE_SZ);
                     memcpy(tbl->body.waveinfo->waves[i], cursor, DAT_WAVE_SZ);
                     cursor += DAT_WAVE_SZ;

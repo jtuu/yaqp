@@ -935,9 +935,9 @@ int main(int argc, char *argv[]) {
 
             node_t *monster_counts = count_monsters(dat, episode);
 
-            const int dest_ext_len = 5;
             const char *dest_ext = ".json";
-            char *dest_file_name = malloc(strlen(file_name) + dest_ext_len + 1);
+            size_t dest_ext_len = strlen(dest_ext);
+            char *dest_file_name = malloc(strlen(file_name) + dest_ext_len);
             strcpy(dest_file_name, file_name);
             char *sep = strrchr(dest_file_name, '/');
             char *dot = strrchr(dest_file_name, '.');
@@ -957,7 +957,7 @@ int main(int argc, char *argv[]) {
             }
 
             FILE *binfp = fopen("quest.bin", "wb");
-            fwrite(bin_data, bin_sz, 1, binfp);
+            fwrite(bin_data, (size_t) bin_sz, 1, binfp);
             fclose(binfp);
 
             write_monster_counts_as_json(dest_file_name, bin, monster_counts, episode);

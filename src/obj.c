@@ -96,6 +96,10 @@ const char* get_obj_name(obj_kind kind) {
             return "Box (Tech)";
         case OBJ_FIXED_BOX_MESETA:
             return "Box (Meseta)";
+        case OBJ_IGNORE:
+        case OBJ_FIXED_BOX_EXACT:
+            return "This should not be here";
+        case OBJ_UNKNOWN:
         default:
             return "Unknown";
         }
