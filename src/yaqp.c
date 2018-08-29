@@ -38,6 +38,7 @@ Contains parts of the Tethealla project.
 #include <string.h>
 #include <wchar.h>
 #include <locale.h>
+#include <errno.h>
 
 #include "../lib/include/psoarchive-error.h"
 #include "qst.h"
@@ -325,7 +326,7 @@ int get_mon_bp_id(mon_kind kind, int episode, int area) {
     return -1;
 }
 
-char* get_npc_name(int type) {
+const char* get_npc_name(int type) {
     if (type >= 0 && type < NUM_NPCS) {
         return npc_names[type];
     }
@@ -356,9 +357,9 @@ int file_path_detect_episode(char *path) {
 }
 
 int dat_detect_episode(dat_t *dat) {
-    for (int i = 0; i < dat->num_tables; i++) {
+    for (unsigned int i = 0; i < dat->num_tables; i++) {
         dat_table_t *tbl = dat->entity_tables[i];
-        int area = tbl->header->area;
+        uint32_t area = tbl->header->area;
         if (tbl->header->type != DAT_TYPE_NPC || area == 0) {
             continue;
         }
@@ -412,6 +413,8 @@ int dat_detect_episode(dat_t *dat) {
             case BREED_GORAN:
             case BREED_SNAKE:
                 return 4;
+            default:
+                break;
             }
         }
     }
@@ -425,8 +428,8 @@ int dat_detect_episode(dat_t *dat) {
 #define OPCODE_BB_MAP_DESIGNATE 0x51
 
 int bin_detect_episode(bin_t *bin) {
-    int obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
-    for (int i = 0; i < obj_code_len - 2; i++) {
+    uint32_t obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
+    for (unsigned int i = 0; i < obj_code_len - 2; i++) {
         uint8_t a = bin->object_code[i];
         uint8_t b = bin->object_code[i + 1];
         uint8_t c = bin->object_code[i + 2];
@@ -438,6 +441,8 @@ int bin_detect_episode(bin_t *bin) {
                 return 2;
             case 2:
                 return 4;
+            default:
+                break;
             }
         }
     }
@@ -448,11 +453,11 @@ int bin_detect_episode(bin_t *bin) {
 #define NUM_MAPS 45
 
 int* bin_get_map_ids(bin_t *bin) {
-    int obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
+    uint32_t obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
     int *map_ids = malloc(NUM_AREAS * sizeof(int));
     for (int i = 0; i < NUM_AREAS; i++) { map_ids[i] = -1; }
     
-    for (int i = 0; i < obj_code_len - 2; i++) {
+    for (unsigned int i = 0; i < obj_code_len - 2; i++) {
         uint8_t a = bin->object_code[i];
         uint8_t b = bin->object_code[i + 1];
         if (a == OPCODE_BB_MAP_DESIGNATE_TABLE && b == OPCODE_BB_MAP_DESIGNATE) {
@@ -464,18 +469,18 @@ int* bin_get_map_ids(bin_t *bin) {
     return map_ids;
 }
 
-const long null = 0;
-const int one = 1;
-const int eight = 8;
+long null = 0;
+int one = 1;
+int eight = 8;
 
 #define BOXES -8035
 
 node_t* count_monsters(dat_t *dat, int episode) {
     node_t *area_npc_counts = NULL;
 
-    for (int i = dat->num_tables - 1; i >= 0; i--) {
+    for (unsigned int i = dat->num_tables - 1; i < dat->num_tables; i--) {
         dat_table_t *tbl = dat->entity_tables[i];
-        int area = tbl->header->area;
+        int area = (int) tbl->header->area;
         if (area == 0) {
             continue;
         }
@@ -506,7 +511,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                     } else {
                         room_node = prepend_node(rooms, npc->section, sizeof(node_t *), &null);
                         rooms = room_node;
-                        node_t **ptr = area_node->data;
+                        node_t **ptr = (node_t **) area_node->data;
                         *ptr = rooms;
                     }
 
@@ -517,7 +522,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                     } else {
                         wave_node = prepend_node(waves, npc->wave_id, sizeof(node_t *), &null);
                         waves = wave_node;
-                        node_t **ptr = room_node->data;
+                        node_t **ptr = (node_t **) room_node->data;
                         *ptr = waves;
                     }
                     
@@ -526,7 +531,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                         (*(int *) count_node->data)++;
                     } else {
                         npc_counts = prepend_node(npc_counts, kind, sizeof(int), &one);
-                        node_t **ptr = wave_node->data;
+                        node_t **ptr = (node_t **) wave_node->data;
                         *ptr = npc_counts;
                     }
                     
@@ -538,7 +543,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                                 (*(int *) canadine_node->data) += 8;
                             } else {
                                 npc_counts = prepend_node(npc_counts, MON_CANADINE, sizeof(int), &eight);
-                                node_t **ptr = wave_node->data;
+                                node_t **ptr = (node_t **) wave_node->data;
                                 *ptr = npc_counts;
                             }
                         }
@@ -551,10 +556,12 @@ node_t* count_monsters(dat_t *dat, int episode) {
                                 (*(int *) recon_node->data) += clone_count;
                             } else {
                                 npc_counts = prepend_node(npc_counts, MON_RECON, sizeof(int), &clone_count);
-                                node_t **ptr = wave_node->data;
+                                node_t **ptr = (node_t **) wave_node->data;
                                 *ptr = npc_counts;
                             }
                         }
+                        break;
+                    default:
                         break;
                     }
                 }
@@ -585,7 +592,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                     } else {
                         room_node = prepend_node(rooms, obj->section, sizeof(node_t *), &null);
                         rooms = room_node;
-                        node_t **ptr = area_node->data;
+                        node_t **ptr = (node_t **) area_node->data;
                         *ptr = rooms;
                     }
 
@@ -596,7 +603,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                     } else {
                         wave_node = prepend_node(waves, BOXES, sizeof(node_t *), &null);
                         waves = wave_node;
-                        node_t **ptr = room_node->data;
+                        node_t **ptr = (node_t **) room_node->data;
                         *ptr = waves;
                     }
                     
@@ -605,7 +612,7 @@ node_t* count_monsters(dat_t *dat, int episode) {
                         (*(int *) count_node->data)++;
                     } else {
                         box_counts = prepend_node(box_counts, kind, sizeof(int), &one);
-                        node_t **ptr = wave_node->data;
+                        node_t **ptr = (node_t **) wave_node->data;
                         *ptr = box_counts;
                     }
                 }
@@ -878,12 +885,20 @@ int main(int argc, char *argv[]) {
         char *file_name = argv[i];
         uint8_t *file_data;
         FILE *file = fopen(file_name, "rb");
-        long file_sz;
+        long ftell_result;
+        size_t file_sz;
 
         if (file) {
             fseek(file, 0, SEEK_END);
-            file_sz = ftell(file);
+            ftell_result = ftell(file);
+            if (ftell_result < 0) {
+                fprintf(stderr, "ftell failed with error %d\n", errno);
+                fclose(file);
+                continue;
+            }
             rewind(file);
+
+            file_sz = (size_t) ftell_result;
 
             file_data = malloc(file_sz * sizeof(uint8_t));
             fread(file_data, file_sz, 1, file);
@@ -902,8 +917,9 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "Failed to parse %s, skipping\n", file_name);
                 continue;
             }
-            dat_t *dat = parse_dat(dat_sz, dat_data);
-            bin_t *bin = parse_bin(bin_sz, bin_data);
+
+            dat_t *dat = parse_dat((size_t) dat_sz, dat_data);
+            bin_t *bin = parse_bin((size_t) bin_sz, bin_data);
             
             int episode = bin_detect_episode(bin);
             if (episode == -1) {
@@ -939,6 +955,10 @@ int main(int argc, char *argv[]) {
             } else {
                 strcat(dest_file_name, dest_ext);
             }
+
+            FILE *binfp = fopen("quest.bin", "wb");
+            fwrite(bin_data, bin_sz, 1, binfp);
+            fclose(binfp);
 
             write_monster_counts_as_json(dest_file_name, bin, monster_counts, episode);
             printf("%s\n", dest_file_name);

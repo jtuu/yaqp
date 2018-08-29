@@ -1,6 +1,7 @@
 #ifndef YAQP_DAT_H
 #define YAQP_DAT_H
 
+#include <stdlib.h>
 #include <stdint.h>
 
 #define FLOAT_MASK 0x800000
@@ -107,7 +108,7 @@ typedef struct dat {
     dat_table_t **entity_tables;
 } dat_t;
 
-dat_t* parse_dat(unsigned int data_len, uint8_t *data);
+dat_t* parse_dat(size_t data_len, uint8_t *data);
 
 void print_dat(dat_t *dat);
 

@@ -1,6 +1,7 @@
 #ifndef YAQP_QST_H
 #define YAQP_QST_H
 
+#include <stdlib.h>
 #include <stdint.h>
 
 #define NUM_QST_HEADER 2
@@ -46,7 +47,7 @@ typedef struct qst {
     qst_body_t body; // Variably sized
 } qst_t;
 
-qst_t* parse_qst(unsigned int data_len, unsigned char *data);
+qst_t* parse_qst(size_t data_len, unsigned char *data);
 
 void print_qst(qst_t *qst);
 

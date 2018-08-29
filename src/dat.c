@@ -6,7 +6,7 @@
 #include "dat.h"
 #include "utils.h"
 
-dat_t* parse_dat(unsigned int data_len, uint8_t *data) {
+dat_t* parse_dat(size_t data_len, uint8_t *data) {
     uint8_t *cursor = data;
     dat_t *dat = malloc(sizeof(dat_t));
 
