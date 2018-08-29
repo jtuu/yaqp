@@ -8,7 +8,7 @@
 #include "utils.h"
 #include "qst.h"
 
-qst_t* parse_qst(unsigned int data_len, unsigned char *data) {
+qst_t* parse_qst(size_t data_len, unsigned char *data) {
     unsigned char *cursor = data;
     qst_t *qst = malloc(sizeof(qst_t));
 
@@ -21,7 +21,7 @@ qst_t* parse_qst(unsigned int data_len, unsigned char *data) {
     unsigned int num_msgs = 0;
     qst_message_t **msgs = (qst_message_t **) malloc(num_msgs * sizeof(qst_message_t *));
 
-    while (cursor - data < data_len) {
+    while ((unsigned int) (cursor - data) < data_len) {
         num_msgs++;
         msgs = (qst_message_t **) realloc(msgs, num_msgs * sizeof(qst_message_t *));
 
@@ -39,7 +39,7 @@ qst_t* parse_qst(unsigned int data_len, unsigned char *data) {
         memcpy(msg->file_name, cursor, QST_FILE_NAME_SZ);
         cursor += QST_FILE_NAME_SZ * sizeof(msg->file_name[0]);
 
-        uint16_t chunk_size = LE16(cursor + QST_MESSAGE_CHUNK_SZ);
+        uint16_t chunk_size = (uint16_t) (LE16(cursor + QST_MESSAGE_CHUNK_SZ));
         msg->size = chunk_size;
         
         msg->file_chunk = (uint8_t *) malloc(chunk_size * sizeof(uint8_t));
@@ -109,26 +109,26 @@ void print_qst(qst_t *qst) {
 }
 
 int qst_extract(qst_t *qst, uint8_t **result, int format) {
-    char *search_ext;
+    char search_ext[5];
 
     switch (format) {
     case BIN:
-        search_ext = ".bin";
+        strncpy(search_ext, ".bin", 5);
         break;
     case DAT:
-        search_ext = ".dat";
+        strncpy(search_ext, ".dat", 5);
         break;
     default:
         fprintf(stderr, "Unknown format for qst_extract: %d.\n", format);
         return 0;
     }
 
-    int prs_sz = 0;
+    size_t prs_sz = 0;
     for (unsigned int i = 0; i < NUM_QST_HEADER; i++) {
         qst_header_t *header = qst->headers[i];
-        char *dot = strrchr(header->file_name, '.');
+        char *dot = strrchr((char *) header->file_name, '.');
         if (dot && !strcmp(dot, search_ext)) {
-            prs_sz = header->file_size;
+            prs_sz = (size_t) header->file_size;
             break;
         }
     }

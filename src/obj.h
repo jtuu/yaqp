@@ -1,6 +1,8 @@
 #ifndef YAQP_OBJ_H
 #define YAQP_OBJ_H
 
+#include "dat.h"
+
 typedef enum {
     OBJ_BOX_STANDARD = 0x88,
     OBJ_BOX_SPECIAL = 0x92,

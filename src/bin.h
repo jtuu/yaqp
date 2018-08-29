@@ -2,6 +2,7 @@
 #define YAQP_BIN_H
 
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef struct bin {
     uint32_t object_code_offset;
@@ -18,7 +19,7 @@ typedef struct bin {
     uint8_t *object_code;
 } bin_t;
 
-bin_t* parse_bin(unsigned int data_len, uint8_t *data);
+bin_t* parse_bin(size_t data_len, uint8_t *data);
 
 void dispose_bin(bin_t *bin);
 
