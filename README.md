@@ -11,7 +11,6 @@ The output file is written into the source directory.
 
 ### Requirements
 * make
-* bash
 * python3 (optional)
 
 Linux. Building on Windows is untested but in theory it should work under MinGW etc.
