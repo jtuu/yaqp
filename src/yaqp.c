@@ -336,26 +336,6 @@ const char* get_npc_name(int type) {
     return str;
 }
 
-
-
-int file_path_detect_episode(char *path) {
-    char *txt_match = stristr(path, "episode");
-    if (txt_match == NULL) {
-        txt_match = stristr(path, "ep");
-        if (txt_match == NULL) {
-            return -1;
-        }
-    }
-
-    char *num_match = strpbrk(txt_match, "124");
-    if (num_match == NULL) {
-        return -1;
-    }
-
-    int episode = *num_match - '0';
-    return episode;
-}
-
 int dat_detect_episode(dat_t *dat) {
     for (unsigned int i = 0; i < dat->num_tables; i++) {
         dat_table_t *tbl = dat->entity_tables[i];
@@ -625,43 +605,6 @@ node_t* count_monsters(dat_t *dat, int episode) {
     return area_npc_counts;
 }
 
-void print_monster_counts(node_t *area, int episode) {
-    const char* const *area_names = ep1_area_names;
-
-    switch (episode) {
-    default:
-    case 1:
-        area_names = ep1_area_names;
-        break;
-    case 2:
-        area_names = ep2_area_names;
-        break;
-    case 4:
-        area_names = ep4_area_names;
-        break;
-    }
-    
-    while (area != NULL) {
-        printf("%s\n", area_names[area->key]);
-        node_t *room = *(node_t **) area->data;
-        while (room != NULL) {
-            printf("    Room %d\n", room->key);
-            node_t *wave = sort_nodes(*(node_t **) room->data);
-            while (wave != NULL) {
-                printf("        Wave %d\n", wave->key);
-                node_t *mon = *(node_t **) wave->data;
-                while (mon != NULL) {
-                    printf("            %s: %d\n", get_npc_name(mon->key), *(int *) mon->data);
-                    mon = mon->next;
-                }
-                wave = wave->next;
-            }
-            room = room->next;
-        }
-        area = area->next;
-    }
-}
-
 void write_monster_counts_as_json(char *dest_file_name, bin_t *bin, node_t *area, int episode) {
     int area_name_offset = 0;
     const char* const *area_names = ep1_area_names;
@@ -925,11 +868,8 @@ int main(int argc, char *argv[]) {
             if (episode == -1) {
                 episode = dat_detect_episode(dat);
                 if (episode == -1) {
-                    episode = file_path_detect_episode(file_name);
-                    if (episode == -1) {
-                        fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
-                        episode = 1;
-                    }
+                    fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
+                    episode = 1;
                 }
             }
 
@@ -955,10 +895,6 @@ int main(int argc, char *argv[]) {
             } else {
                 strcat(dest_file_name, dest_ext);
             }
-
-            FILE *binfp = fopen("quest.bin", "wb");
-            fwrite(bin_data, (size_t) bin_sz, 1, binfp);
-            fclose(binfp);
 
             write_monster_counts_as_json(dest_file_name, bin, monster_counts, episode);
             printf("%s\n", dest_file_name);
