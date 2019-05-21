@@ -12,11 +12,18 @@ bin_t* parse_bin(size_t data_len, uint8_t *data) {
     
     bin_t *bin = malloc(sizeof(bin_t));
     memcpy(bin, cursor, sizeof(bin_t));
-    cursor += sizeof(bin_t);
+    cursor += bin->object_code_offset;
 
-    uint32_t obj_code_len = bin->function_offset_table_offset - bin->object_code_offset;
-    bin->object_code = malloc(sizeof(uint8_t) * obj_code_len);
-    memcpy(bin->object_code, cursor, sizeof(uint8_t) * obj_code_len);
+    bin->object_code_len = bin->function_offset_table_offset - bin->object_code_offset;
+    bin->object_code = malloc(sizeof(uint8_t) * bin->object_code_len);
+    memcpy(bin->object_code, cursor, sizeof(uint8_t) * bin->object_code_len);
+
+    // probably not the correct length but good enough for now?
+    bin->function_offset_table_len = (bin->bin_size - bin->function_offset_table_offset) / sizeof(int32_t);
+    cursor = data + bin->function_offset_table_offset;
+    bin->function_offset_table = malloc(sizeof(int32_t) * bin->function_offset_table_len);
+    memcpy(bin->function_offset_table, cursor, sizeof(int32_t) * bin->function_offset_table_len);
+    
     return bin;
 }
 
