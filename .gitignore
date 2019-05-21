@@ -1,3 +1,8 @@
 *.qst
 .vscode
 obj
+*.o
+*.bin
+*.dat
+*.functions
+*.json

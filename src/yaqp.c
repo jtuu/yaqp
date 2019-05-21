@@ -35,6 +35,7 @@ Contains parts of the Tethealla project.
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 #include <wchar.h>
 #include <locale.h>
@@ -816,20 +817,78 @@ void dispose_monster_counts(node_t *area) {
     }
 }
 
+typedef enum {
+    VERBOSE,
+    WRITE_JSON,
+    DUMP_BIN,
+    DUMP_DAT,
+    DUMP_OBJCODE,
+    NUM_OPTS
+} yaqp_opt;
+
+const char opt_shorthands[NUM_OPTS] = {
+    [VERBOSE] = 'v',
+    [WRITE_JSON] = 'j',
+    [DUMP_BIN] = 'b',
+    [DUMP_DAT] = 'd',
+    [DUMP_OBJCODE] = 'o'
+};
+
 int main(int argc, char *argv[]) {
     if (argc <= 1) {
-        fprintf(stderr, "No input file specified.\n");
+        fprintf(stderr, "Not enough arguments.\n");
         exit(1);
+    }
+
+    bool opts[NUM_OPTS] = {false};
+    int num_opts = 0;
+
+    // check args for options
+    for (int i = 1; i < argc; i++) {
+        char *arg = argv[i];
+        if (arg[0] == '-') {
+            num_opts++;
+            char *c = &arg[1];
+            // stop checking after "--"
+            if (*c == '-') {
+                break;
+            }
+            while (*c) {
+                for (unsigned int j = 0; j < NUM_OPTS; j++) {
+                    if (*c == opt_shorthands[j]) {
+                        opts[j] = true;
+                        break;
+                    }
+                }
+                c++;
+            }
+        }
+    }
+
+    if ((argc - num_opts) <= 1) {
+        fprintf(stderr, "No input file(s) specified.\n");
+        return -1;
     }
     
     setlocale(LC_ALL, "");
 
+    // process files
+    bool double_dash = false;
     for (int i = 1; i < argc; i++) {
         char *file_name = argv[i];
+        // ignore args starting with a dash unless a double dash was encountered
+        if (!double_dash && file_name[0] == '-') {
+            if (file_name[1] == '-') {
+                double_dash = true;
+            }
+            continue;
+        }
+
         uint8_t *file_data;
         FILE *file = fopen(file_name, "rb");
         long ftell_result;
         size_t file_sz;
+        FILE *out_file;
 
         if (file) {
             fseek(file, 0, SEEK_END);
@@ -863,44 +922,100 @@ int main(int argc, char *argv[]) {
 
             dat_t *dat = parse_dat((size_t) dat_sz, dat_data);
             bin_t *bin = parse_bin((size_t) bin_sz, bin_data);
-            
-            int episode = bin_detect_episode(bin);
-            if (episode == -1) {
-                episode = dat_detect_episode(dat);
+
+            if (opts[WRITE_JSON]) {    
+                int episode = bin_detect_episode(bin);
                 if (episode == -1) {
-                    fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
-                    episode = 1;
+                    episode = dat_detect_episode(dat);
+                    if (episode == -1) {
+                        fprintf(stderr, "Failed to detect episode, defaulting to 1\n");
+                        episode = 1;
+                    }
                 }
+
+                node_t *monster_counts = count_monsters(dat, episode);
+
+                char *dest_file_name = change_file_ext(file_name, ".json");
+                write_monster_counts_as_json(dest_file_name, bin, monster_counts, episode);
+
+                if (opts[VERBOSE]) {
+                    printf("%s\n", dest_file_name);
+                }
+
+                free(dest_file_name);
+                dispose_monster_counts(monster_counts);
             }
 
-            node_t *monster_counts = count_monsters(dat, episode);
+            if (opts[DUMP_BIN]) {
+                char *dest_file_name = change_file_ext(file_name, ".bin");
+                out_file = fopen(dest_file_name, "wb");
 
-            const char *dest_ext = ".json";
-            size_t dest_ext_len = strlen(dest_ext);
-            char *dest_file_name = malloc(strlen(file_name) + dest_ext_len);
-            strcpy(dest_file_name, file_name);
-            char *sep = strrchr(dest_file_name, '/');
-            char *dot = strrchr(dest_file_name, '.');
+                if (out_file) {
+                    fwrite(bin_data, (size_t) bin_sz, 1, out_file);
+                    fclose(out_file);
 
-            if (dot != NULL) {
-                if (sep != NULL) {
-                    if (sep < dot) {
-                        strcpy(dot, dest_ext);
-                        *(dot + dest_ext_len) = '\0';
+                    if (opts[VERBOSE]) {
+                        printf("%s\n", dest_file_name);
                     }
                 } else {
-                    strcpy(dot, dest_ext);
-                    *(dot + dest_ext_len) = '\0';
+                    fprintf(stderr, "Failed to write file %s\n", dest_file_name);
                 }
-            } else {
-                strcat(dest_file_name, dest_ext);
+
+                free(dest_file_name);
             }
 
-            write_monster_counts_as_json(dest_file_name, bin, monster_counts, episode);
-            printf("%s\n", dest_file_name);
+            if (opts[DUMP_DAT]) {
+                char *dest_file_name = change_file_ext(file_name, ".dat");
+                out_file = fopen(dest_file_name, "wb");
 
-            free(dest_file_name);
-            dispose_monster_counts(monster_counts);
+                if (out_file) {
+                    fwrite(dat_data, (size_t) dat_sz, 1, out_file);
+                    fclose(out_file);
+
+                    if (opts[VERBOSE]) {
+                        printf("%s\n", dest_file_name);
+                    }
+                } else {
+                    fprintf(stderr, "Failed to write file %s\n", dest_file_name);
+                }
+
+                free(dest_file_name);
+            }
+
+            if (opts[DUMP_OBJCODE]) {
+                char *objcode_dest_file_name = change_file_ext(file_name, ".o");
+                out_file = fopen(objcode_dest_file_name, "wb");
+
+                if (out_file) {
+                    fwrite(bin->object_code, bin->object_code_len, 1, out_file);
+                    fclose(out_file);
+
+                    if (opts[VERBOSE]) {
+                        printf("%s\n", objcode_dest_file_name);
+                    }
+                } else {
+                    fprintf(stderr, "Failed to write file %s\n", objcode_dest_file_name);
+                }
+
+                free(objcode_dest_file_name);
+
+                char *funcs_dest_file_name = change_file_ext(file_name, ".functions");
+                out_file = fopen(funcs_dest_file_name, "wb");
+
+                if (out_file) {
+                    fwrite(bin->function_offset_table, bin->function_offset_table_len, 1, out_file);
+                    fclose(out_file);
+
+                    if (opts[VERBOSE]) {
+                        printf("%s\n", funcs_dest_file_name);
+                    }
+                } else {
+                    fprintf(stderr, "Failed to write file %s\n", funcs_dest_file_name);
+                }
+
+                free(funcs_dest_file_name);
+            }
+
             free(dat_data);
             free(bin_data);
             free(file_data);

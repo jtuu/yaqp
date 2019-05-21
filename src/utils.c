@@ -91,3 +91,27 @@ char* stristr(char *str1, char *str2) {
     
     return NULL;
 }
+
+char *change_file_ext(char *file_path, const char *new_ext) {
+    size_t new_ext_len = strlen(new_ext);
+    char *new_file_path = malloc(strlen(file_path) + new_ext_len);
+    strcpy(new_file_path, file_path);
+    char *sep = strrchr(new_file_path, '/');
+    char *dot = strrchr(new_file_path, '.');
+
+    if (dot != NULL) {
+        if (sep != NULL) {
+            if (sep < dot) {
+                strcpy(dot, new_ext);
+                *(dot + new_ext_len) = '\0';
+            }
+        } else {
+            strcpy(dot, new_ext);
+            *(dot + new_ext_len) = '\0';
+        }
+    } else {
+        strcat(new_file_path, new_ext);
+    }
+
+    return new_file_path;
+}

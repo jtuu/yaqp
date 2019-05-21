@@ -23,6 +23,8 @@ void print_wide_str_json_escaped(FILE *file, uint16_t *str);
 
 char* stristr(const char *str1, const char *str2);
 
+char *change_file_ext(char *file_path, const char *new_ext);
+
 #define UNUSED(x) (void)(x)
 
 #endif
