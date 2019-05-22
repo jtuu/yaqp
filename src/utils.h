@@ -8,7 +8,7 @@
 #define LE16(x) *(x) | (uint16_t) *(x + 1) << 8
 #define LE32(x) *(x) | (uint32_t) *(x + 1) << 8 | (uint32_t) *(x + 2) << 16 | (uint32_t) *(x + 3) << 24
 #define BE16(x) *(x + 1) | (uint16_t) *(x) << 8
-#define BE32(x) *(x + 3) | (uint16_t) *(x + 2) << 8 | (uint32_t) *(x + 1) << 16 | (uint32_t) *(x) << 24
+#define BE32(x) (uint16_t) (*(x + 3) | (uint16_t) *(x + 2) << 8) | (uint32_t) *(x + 1) << 16 | (uint32_t) *(x) << 24
 
 #define SWAP_BYTES(x) (x & 0xff) << 8 | (x & 0xff00) >> 8
 
