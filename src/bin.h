@@ -26,4 +26,6 @@ bin_t* parse_bin(size_t data_len, uint8_t *data);
 
 void dispose_bin(bin_t *bin);
 
+void print_pasm(bin_t *bin);
+
 #endif

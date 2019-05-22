@@ -823,6 +823,7 @@ typedef enum {
     DUMP_BIN,
     DUMP_DAT,
     DUMP_OBJCODE,
+    PRINT_PASM,
     NUM_OPTS
 } yaqp_opt;
 
@@ -831,7 +832,8 @@ const char opt_shorthands[NUM_OPTS] = {
     [WRITE_JSON] = 'j',
     [DUMP_BIN] = 'b',
     [DUMP_DAT] = 'd',
-    [DUMP_OBJCODE] = 'o'
+    [DUMP_OBJCODE] = 'o',
+    [PRINT_PASM] = 'p'
 };
 
 int main(int argc, char *argv[]) {
@@ -1014,6 +1016,10 @@ int main(int argc, char *argv[]) {
                 }
 
                 free(funcs_dest_file_name);
+            }
+
+            if (opts[PRINT_PASM]) {
+                print_pasm(bin);
             }
 
             free(dat_data);
