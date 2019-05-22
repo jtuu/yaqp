@@ -8,7 +8,7 @@ DEPS := $(GEN_DEPS) ./src/areas.h ./src/bin.h ./src/bp.h ./src/dat.h ./src/items
 SRC := ./lib/PRS-decomp.c ./src/bin.c ./src/dat.c ./src/list.c ./src/obj.c ./src/qst.c ./src/utils.c ./src/yaqp.c
 ODIR := obj
 OBJ := $(foreach path,$(SRC),$(patsubst %.c,$(ODIR)/%.o,$(call shift-path,$(path))))
-CFLAGS_DIAG := -Werror -fmax-errors=5 -Wextra -Wall -Wundef -Wshadow -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wswitch-enum -Wconversion -Wunreachable-code
+CFLAGS_DIAG := -Werror -fmax-errors=5 -Wextra -Wall -Wundef -Wshadow -Wpointer-arith -Wcast-align -Wstrict-prototypes -Wstrict-overflow=5 -Wwrite-strings -Waggregate-return -Wcast-qual -Wswitch-default -Wconversion -Wunreachable-code
 CFLAGS := -march=native -std=c99 -Ilib/include -Isrc
 
 bin/yaqp: $(OBJ) $(DEPS)
