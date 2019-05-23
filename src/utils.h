@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define LE16(x) *(x) | (uint16_t) *(x + 1) << 8
-#define LE32(x) *(x) | (uint32_t) *(x + 1) << 8 | (uint32_t) *(x + 2) << 16 | (uint32_t) *(x + 3) << 24
+#define LE16(x) (uint16_t) (*(x) | (uint16_t) *(x + 1) << 8)
+#define LE32(x) (uint16_t) (*(x) | (uint32_t) *(x + 1) << 8) | (uint32_t) *(x + 2) << 16 | (uint32_t) *(x + 3) << 24
 #define BE16(x) (uint16_t) (*(x + 1) | (uint16_t) *(x) << 8)
 #define BE32(x) (uint16_t) (*(x + 3) | (uint16_t) *(x + 2) << 8) | (uint32_t) *(x + 1) << 16 | (uint32_t) *(x) << 24
 

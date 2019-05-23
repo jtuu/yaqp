@@ -56,7 +56,7 @@ typedef struct parser {
     uint8_t stack[STACK_SIZE];
     size_t stack_ptr;
     const instruction_t *cur_instr;
-    unsigned int cur_arg;
+    size_t cur_arg;
 } parser_t;
 
 bool find_label(parser_t *parser) {
@@ -116,34 +116,57 @@ float parse_float(uint8_t *bytes) {
 }
 
 uint16_t parse_uint16(uint8_t *bytes) {
-    return BE16(bytes);
+    return LE16(bytes);
 }
 
 uint32_t parse_uint32(uint8_t *bytes) {
-    return BE32(bytes);
+    return LE32(bytes);
+}
+
+bool should_print(parser_t *parser) {
+    for (size_t i = 0; i < INSTRUCTION_MAX_ARITY; i++) {
+        if (parser->cur_instr->args[i] == T_PUSH) {
+            return false;
+        }
+    }
+    return true;
 }
 
 int print_arg(arg_kind arg, uint8_t *bytes) {
     switch (arg) {
     case T_BYTE:
-        printf(" %x", *bytes);
+        printf(" %02x", *bytes);
         break;
     case T_REG:
     case T_BREG:
         printf(" R%d", *bytes);
         break;
     case T_WORD:
+    case T_DATA:
         printf(" %04x", parse_uint16(bytes));
         break;
     case T_FUNC:
     case T_FUNC2:
-        printf(" F%d", parse_uint16(bytes));;
+        printf(" F%d", parse_uint16(bytes));
         break;
     case T_DWORD:
         printf(" %08x", parse_uint32(bytes));
         break;
     case T_FLOAT:
         printf(" %f", parse_float(bytes));
+        break;
+    case T_SWITCH:
+        {
+            uint8_t *cursor = bytes;
+            uint8_t len = *cursor;
+            size_t stride = sizeof(uint16_t);
+            cursor++;
+            uint8_t *end = cursor + len * stride;
+            printf(" %d", len);
+            for (; cursor != end ; cursor += stride) {
+                printf(":F%d", parse_uint16(cursor));
+            }
+        }
         break;
     default:
         fprintf(stderr, "Unhandled argument kind: %d\n", arg);
@@ -156,6 +179,7 @@ int print_arg(arg_kind arg, uint8_t *bytes) {
 int stack_push(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     size_t arg_sz = arg_sizes[arg];
+    printf("push %ld (%ld/%d)\n", arg_sz, parser->stack_ptr, STACK_SIZE);
 
     // check if there's enough space
     if (parser->stack_ptr + arg_sz > STACK_SIZE) {
@@ -168,17 +192,25 @@ int stack_push(parser_t *parser) {
         parser->stack[parser->stack_ptr++] = parser->bin->object_code[i];
     }
 
-    print_arg(arg, &parser->bin->object_code[parser->obj_code_counter]);
+    if (should_print(parser)) {
+        print_arg(arg, &parser->bin->object_code[parser->obj_code_counter]);
+    }
 
     return 0;
 }
 
+// doesn't actually pop in the traditional sense because we need to
+// take the args in the insertion order
 int stack_pop(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     size_t arg_sz = arg_sizes[arg];
-    // move to start of this arg
-    parser->stack_ptr -= arg_sz;
-    return print_arg(arg, &parser->stack[parser->stack_ptr]);
+    int ret = 0;
+    if (should_print(parser)) {
+        ret = print_arg(arg, &parser->stack[parser->stack_ptr]);
+    }
+    // move to next arg
+    parser->stack_ptr += arg_sz;
+    return ret;
 }
 
 int process_arg(parser_t *parser) {
@@ -194,14 +226,42 @@ int process_arg(parser_t *parser) {
         ret = stack_push(parser);
         break;
     default:
-        ret = print_arg(arg, &parser->bin->object_code[parser->obj_code_counter]);
+        if (should_print(parser)) {
+            ret = print_arg(arg, &parser->bin->object_code[parser->obj_code_counter]);
+        }
         break;
     }
 
-    // move forward
-    parser->obj_code_counter += arg_sz;
+    if (parser->stack_mode != STACK_MODE_POP) {
+        // move forward
+        if (arg_sz == VARIABLE_SIZED) {
+            switch (arg) {
+            case T_SWITCH:
+                parser->obj_code_counter += parser->bin->object_code[parser->obj_code_counter] * sizeof(uint16_t) + 1;
+                break;
+            default:
+                fprintf(stderr, "Unhandled variable sized arg\n");
+                break;
+            }
+        } else {
+            parser->obj_code_counter += arg_sz;
+        }
+    }
 
     return ret;
+}
+
+int rewind_stack(parser_t *parser) {
+    size_t args_sz_sum = 0;
+    for (size_t i = parser->cur_arg; i < INSTRUCTION_MAX_ARITY; i++) {
+        args_sz_sum += arg_sizes[parser->cur_instr->args[i]];
+    }
+    if (parser->stack_ptr - args_sz_sum > parser->stack_ptr) {
+        fprintf(stderr, "Stack underflow\n");
+        return -1;
+    }
+    parser->stack_ptr -= args_sz_sum;
+    return 0;
 }
 
 int parse_data(parser_t *parser) {
@@ -210,11 +270,21 @@ int parse_data(parser_t *parser) {
 
     switch (arg) {
     case T_NONE:
-        printf("\n");
+        if (parser->stack_mode == STACK_MODE_POP) {
+            // need to move stack pointer back to the real head after popping
+            ret = rewind_stack(parser);
+        }
+        if (should_print(parser)) {
+            printf("\n");
+        }
         begin_code_mode(parser);
         break;
     case T_ARGS:
         parser->stack_mode = STACK_MODE_POP;
+        // we need to take the args in the insertion order
+        // so let's move the stack pointer all the way back
+        // to where the arguments for this function start
+        ret = rewind_stack(parser);
         break;
     case T_PUSH:
         parser->stack_mode = STACK_MODE_PUSH;
@@ -236,7 +306,9 @@ int parse_data(parser_t *parser) {
 int parse_code(parser_t *parser) {
     find_label(parser);
     if (find_instruction(parser)) {
-        printf("    %s", parser->cur_instr->name);
+        if (should_print(parser)) {
+            printf("    %s", parser->cur_instr->name);
+        }
         begin_data_mode(parser);
     } else {
         fprintf(stderr, "Catastrophic failure: failed to find next instruction\n");
