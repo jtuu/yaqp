@@ -46,7 +46,7 @@ typedef enum {
 } stack_mode_kind;
 
 // idk
-#define STACK_SIZE 64
+#define STACK_SIZE 1024
 
 typedef struct parser {
     bin_t *bin;
@@ -132,6 +132,31 @@ bool should_print(parser_t *parser) {
     return true;
 }
 
+size_t str_len(uint8_t *bytes) {
+    size_t len = 0;
+    while (*bytes || *(bytes + 1)) {
+        bytes += sizeof(uint16_t);
+        len++;
+    }
+    return len + 1;
+}
+
+void print_str(uint8_t *bytes) {
+    uint16_t *cur = (uint16_t *) bytes;
+    printf(" \"");
+    do {
+        switch (*cur) {
+        case 0x0a:
+            printf("\\n");
+            break;
+        default:
+            printf("%lc", *cur);
+            break;
+        }
+    } while (*(++cur) != 0);
+    printf("\"");
+}
+
 int print_arg(arg_kind arg, uint8_t *bytes) {
     switch (arg) {
     case T_BYTE:
@@ -154,6 +179,9 @@ int print_arg(arg_kind arg, uint8_t *bytes) {
         break;
     case T_FLOAT:
         printf(" %f", parse_float(bytes));
+        break;
+    case T_STR:
+        print_str(bytes);
         break;
     case T_SWITCH:
         {
@@ -179,7 +207,17 @@ int print_arg(arg_kind arg, uint8_t *bytes) {
 int stack_push(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     size_t arg_sz = arg_sizes[arg];
-    printf("push %ld (%ld/%d)\n", arg_sz, parser->stack_ptr, STACK_SIZE);
+
+    if (arg_sz == VARIABLE_SIZED) {
+        switch (arg) {
+        case T_STR:
+            arg_sz = str_len(&parser->bin->object_code[parser->obj_code_counter]) * sizeof(uint16_t);
+            break;
+        default:
+            fprintf(stderr, "Unhandled push of variable sized argument: %d\n", arg);
+            return -1;
+        }
+    }
 
     // check if there's enough space
     if (parser->stack_ptr + arg_sz > STACK_SIZE) {
@@ -190,6 +228,15 @@ int stack_push(parser_t *parser) {
     // push data from object code to stack
     for (size_t i = parser->obj_code_counter; i < parser->obj_code_counter + arg_sz; i++) {
         parser->stack[parser->stack_ptr++] = parser->bin->object_code[i];
+    }
+
+    if (arg == T_STR) {
+        // write string size to the end
+        parser->stack[parser->stack_ptr + 0] = (arg_sz >> 24) & 0xff;
+        parser->stack[parser->stack_ptr + 1] = (arg_sz >> 16) & 0xff;
+        parser->stack[parser->stack_ptr + 2] = (arg_sz >> 8) & 0xff;
+        parser->stack[parser->stack_ptr + 3] = arg_sz & 0xff;
+        parser->stack_ptr += 4;
     }
 
     if (should_print(parser)) {
@@ -205,9 +252,22 @@ int stack_pop(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     size_t arg_sz = arg_sizes[arg];
     int ret = 0;
+
+    if (arg_sz == VARIABLE_SIZED) {
+        switch (arg) {
+        case T_STR:
+            arg_sz = str_len(&parser->stack[parser->stack_ptr]) * sizeof(uint16_t) + 4;
+            break;
+        default:
+            fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
+            break;
+        }
+    }
+
     if (should_print(parser)) {
         ret = print_arg(arg, &parser->stack[parser->stack_ptr]);
     }
+
     // move to next arg
     parser->stack_ptr += arg_sz;
     return ret;
@@ -239,8 +299,12 @@ int process_arg(parser_t *parser) {
             case T_SWITCH:
                 parser->obj_code_counter += parser->bin->object_code[parser->obj_code_counter] * sizeof(uint16_t) + 1;
                 break;
+            case T_STR:
+                parser->obj_code_counter += BE32(&parser->stack[parser->stack_ptr - 4]);
+                break;
             default:
-                fprintf(stderr, "Unhandled variable sized arg\n");
+                fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
+                ret = -1;
                 break;
             }
         } else {
@@ -253,8 +317,21 @@ int process_arg(parser_t *parser) {
 
 int rewind_stack(parser_t *parser) {
     size_t args_sz_sum = 0;
-    for (size_t i = parser->cur_arg; i < INSTRUCTION_MAX_ARITY; i++) {
-        args_sz_sum += arg_sizes[parser->cur_instr->args[i]];
+    for (size_t i = INSTRUCTION_MAX_ARITY; i--;) {
+        arg_kind arg = parser->cur_instr->args[i];
+        size_t arg_sz = arg_sizes[arg];
+        if (arg_sz == VARIABLE_SIZED) {
+            switch (arg) {
+            case T_STR:
+                args_sz_sum += (BE32(&parser->stack[parser->stack_ptr - args_sz_sum - 4])) + 4;
+                break;
+            default:
+                fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
+                break;
+            }
+        } else {
+            args_sz_sum += arg_sz;
+        }
     }
     if (parser->stack_ptr - args_sz_sum > parser->stack_ptr) {
         fprintf(stderr, "Stack underflow\n");
