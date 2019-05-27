@@ -37,6 +37,7 @@ SRC := \
 $(GEN_SRC) \
 ./lib/PRS-decomp.c \
 ./src/bin.c \
+./src/bp.c \
 ./src/dat.c \
 ./src/list.c \
 ./src/obj.c \
