@@ -51,6 +51,7 @@ Contains parts of the Tethealla project.
 #include "areas.h"
 #include "bp.h"
 #include "obj.h"
+#include "disasm.h"
 
 typedef enum {
     BREED_BEAR = 64,
@@ -823,6 +824,7 @@ typedef enum {
     DUMP_BIN,
     DUMP_DAT,
     DUMP_OBJCODE,
+    PRINT_PASM,
     NUM_OPTS
 } yaqp_opt;
 
@@ -831,7 +833,8 @@ const char opt_shorthands[NUM_OPTS] = {
     [WRITE_JSON] = 'j',
     [DUMP_BIN] = 'b',
     [DUMP_DAT] = 'd',
-    [DUMP_OBJCODE] = 'o'
+    [DUMP_OBJCODE] = 'o',
+    [PRINT_PASM] = 'p'
 };
 
 int main(int argc, char *argv[]) {
@@ -1014,6 +1017,22 @@ int main(int argc, char *argv[]) {
                 }
 
                 free(funcs_dest_file_name);
+            }
+
+            if (opts[PRINT_PASM]) {
+                char *dest_file_name = change_file_ext(file_name, ".pasm");
+                out_file = fopen(dest_file_name, "w");
+
+                if (out_file) {
+                    disassemble(out_file, bin);
+                    fclose(out_file);
+
+                    if (opts[VERBOSE]) {
+                        printf("%s\n", dest_file_name);
+                    }
+                } else {
+                    fprintf(stderr, "Failed to write file %s\n", dest_file_name);
+                }
             }
 
             free(dat_data);

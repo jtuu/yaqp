@@ -6,3 +6,4 @@ obj
 *.dat
 *.functions
 *.json
+*.pasm
