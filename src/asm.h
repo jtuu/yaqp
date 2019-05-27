@@ -490,7 +490,7 @@ const instruction_t instructions[NUM_INSTRUCTIONS] = {
     {0xf8f0, "turn_off_bgm_p2", {T_NONE, T_NONE, T_V3}},
     {0xf8f1, "turn_on_bgm_p2", {T_NONE, T_NONE, T_V3}},
     {0xf8f2, "load_unk_data", {T_ARGS, T_DWORD, T_DWORD, T_DWORD, T_DWORD, T_BREG, T_DATA, T_NONE, T_V3}},
-    {0xf8f3, "particle2", {T_ARGS, T_BREG, T_DWORD, T_FLOAT, T_NONE, T_V3}},
+    {0xf8f3, "particle2", {T_ARGS, T_BREG, T_REG, T_REG, T_NONE, T_V3}},
     {0xf901, "dec2float", {T_IMED, T_REG, T_REG, T_NONE, T_V3}},
     {0xf902, "float2dec", {T_IMED, T_REG, T_REG, T_NONE, T_V3}},
     {0xf903, "flet", {T_IMED, T_REG, T_REG, T_NONE, T_V3}},

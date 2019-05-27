@@ -36,7 +36,8 @@ void dispose_bin(bin_t *bin) {
 
 typedef enum {
     PARSE_MODE_CODE,
-    PARSE_MODE_DATA
+    PARSE_MODE_DATA,
+    PARSE_MODE_RAW
 } parse_mode_kind;
 
 typedef enum {
@@ -44,6 +45,10 @@ typedef enum {
     STACK_MODE_PUSH,
     STACK_MODE_POP
 } stack_mode_kind;
+
+typedef enum {
+    LABEL_RAW_DATA = 1 << 0
+} label_flag;
 
 // idk
 #define STACK_SIZE 1024
@@ -57,18 +62,18 @@ typedef struct parser {
     size_t stack_ptr;
     const instruction_t *cur_instr;
     size_t cur_arg;
+    label_flag *label_flags;
 } parser_t;
 
-bool find_label(parser_t *parser) {
+int find_label(parser_t *parser) {
     // dumb
     for (unsigned j = 0; j < parser->bin->function_offset_table_len; j++) {
         int32_t offset = parser->bin->function_offset_table[j];
         if (offset != -1 && (size_t) offset == parser->obj_code_counter) {
-            printf("F%d:\n", j);
-            return true;
+            return (int) j;
         }
     }
-    return false;
+    return -1;
 }
 
 bool find_instruction(parser_t *parser) {
@@ -104,6 +109,10 @@ void begin_data_mode(parser_t *parser) {
     parser->cur_arg = 0;
     parser->parse_mode = PARSE_MODE_DATA;
     parser->stack_mode = STACK_MODE_IMMEDIATE;
+}
+
+void begin_raw_mode(parser_t *parser) {
+    parser->parse_mode = PARSE_MODE_RAW;
 }
 
 float parse_float(uint8_t *bytes) {
@@ -204,6 +213,20 @@ int print_arg(arg_kind arg, uint8_t *bytes) {
     return 0;
 }
 
+int finalize_arg(parser_t *parser, arg_kind arg, uint8_t *arg_data) {
+    int ret = 0;
+
+    if (arg == T_DATA) {
+        parser->label_flags[parse_uint16(arg_data)] |= LABEL_RAW_DATA;
+    }
+
+    if (should_print(parser)) {
+        ret = print_arg(arg, arg_data);
+    }
+
+    return ret;
+}
+
 int stack_push(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     size_t arg_sz = arg_sizes[arg];
@@ -239,9 +262,7 @@ int stack_push(parser_t *parser) {
         parser->stack_ptr += 4;
     }
 
-    if (should_print(parser)) {
-        print_arg(arg, &parser->bin->object_code[parser->obj_code_counter]);
-    }
+    finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
 
     return 0;
 }
@@ -264,9 +285,7 @@ int stack_pop(parser_t *parser) {
         }
     }
 
-    if (should_print(parser)) {
-        ret = print_arg(arg, &parser->stack[parser->stack_ptr]);
-    }
+    finalize_arg(parser, arg, &parser->stack[parser->stack_ptr]);
 
     // move to next arg
     parser->stack_ptr += arg_sz;
@@ -286,9 +305,7 @@ int process_arg(parser_t *parser) {
         ret = stack_push(parser);
         break;
     default:
-        if (should_print(parser)) {
-            ret = print_arg(arg, &parser->bin->object_code[parser->obj_code_counter]);
-        }
+        finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
         break;
     }
 
@@ -297,9 +314,11 @@ int process_arg(parser_t *parser) {
         if (arg_sz == VARIABLE_SIZED) {
             switch (arg) {
             case T_SWITCH:
+                // the size of a switch is determined by the first byte
                 parser->obj_code_counter += parser->bin->object_code[parser->obj_code_counter] * sizeof(uint16_t) + 1;
                 break;
             case T_STR:
+                // we encoded the length at the end of a string
                 parser->obj_code_counter += BE32(&parser->stack[parser->stack_ptr - 4]);
                 break;
             default:
@@ -317,12 +336,16 @@ int process_arg(parser_t *parser) {
 
 int rewind_stack(parser_t *parser) {
     size_t args_sz_sum = 0;
+
     for (size_t i = INSTRUCTION_MAX_ARITY; i--;) {
         arg_kind arg = parser->cur_instr->args[i];
         size_t arg_sz = arg_sizes[arg];
+
         if (arg_sz == VARIABLE_SIZED) {
             switch (arg) {
             case T_STR:
+                // read the size at the end (move -4 bytes)
+                // and add the additional 4 bytes to the sum
                 args_sz_sum += (BE32(&parser->stack[parser->stack_ptr - args_sz_sum - 4])) + 4;
                 break;
             default:
@@ -333,11 +356,14 @@ int rewind_stack(parser_t *parser) {
             args_sz_sum += arg_sz;
         }
     }
+
     if (parser->stack_ptr - args_sz_sum > parser->stack_ptr) {
         fprintf(stderr, "Stack underflow\n");
         return -1;
     }
+
     parser->stack_ptr -= args_sz_sum;
+
     return 0;
 }
 
@@ -381,22 +407,56 @@ int parse_data(parser_t *parser) {
 }
 
 int parse_code(parser_t *parser) {
-    find_label(parser);
+    int ret = 0;
+    int label = find_label(parser);
+
+    if (label != -1) {
+        printf("F%d:\n", label);
+
+        if (parser->label_flags[label] & LABEL_RAW_DATA) {
+            begin_raw_mode(parser);
+            return ret;
+        }
+    }
+    
     if (find_instruction(parser)) {
         if (should_print(parser)) {
             printf("    %s", parser->cur_instr->name);
         }
         begin_data_mode(parser);
     } else {
-        fprintf(stderr, "Catastrophic failure: failed to find next instruction\n");
-        return -1;
+        fprintf(stderr, "Failed to find next instruction, switching to raw output\n");
+        begin_raw_mode(parser);
     }
-    return 0;
+    return ret;
+}
+
+int parse_raw(parser_t *parser) {
+    int ret = 0;
+
+    unsigned int num_cols = 8;
+    unsigned int i = 0;
+    printf("    HEX:");
+    do {
+        if (i != 0 && i % num_cols == 0) {
+            printf("\n    HEX:");
+        }
+        printf(" %02x", parser->bin->object_code[parser->obj_code_counter]);
+        i++;
+        parser->obj_code_counter++;
+    } while (find_label(parser) == -1 && parser->obj_code_counter < parser->bin->object_code_len);
+    printf("\n");
+
+    begin_code_mode(parser);
+
+    return ret;
 }
 
 void print_pasm(bin_t *bin) {
     parser_t parser = {0};
     parser.bin = bin;
+    parser.label_flags = calloc(bin->function_offset_table_len, sizeof(label_flag));
+
     begin_code_mode(&parser);
     
     while (parser.obj_code_counter < bin->object_code_len) {
@@ -408,6 +468,9 @@ void print_pasm(bin_t *bin) {
         case PARSE_MODE_DATA:
             ret = parse_data(&parser);
             break;
+        case PARSE_MODE_RAW:
+            ret = parse_raw(&parser);
+            break;
         default:
             break;
         }
@@ -416,4 +479,6 @@ void print_pasm(bin_t *bin) {
             break;
         }
     }
+
+    free(parser.label_flags);
 }
