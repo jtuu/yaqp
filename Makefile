@@ -5,9 +5,14 @@ shift-path = $(subst $(space),/,$(call shift-list,$(subst /, ,$1)))
 
 CC := gcc
 
+GEN_SRC := \
+./src/mon.c \
+./src/mon.h
+# end GEN_SRC
+
 GEN_DEPS := \
-src/mon.h \
-src/areas.h \
+./src/mon.h \
+./src/areas.h
 # end GEN_DEPS
 
 DEPS := \
@@ -29,6 +34,7 @@ $(GEN_DEPS) \
 # end DEPS
 
 SRC := \
+$(GEN_SRC) \
 ./lib/PRS-decomp.c \
 ./src/bin.c \
 ./src/dat.c \
@@ -86,11 +92,11 @@ $(ODIR)/lib/%.o: lib/%.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 # generate sources
-src/mon.h: scripts/gen_mon_data.py
-	python3 $< > $@
+src/mon.h src/mon.c: scripts/gen_mon_data.py scripts/common.py
+	python3 $< $@
 
-src/areas.h: scripts/gen_area_data.py
-	python3 $< > $@
+src/areas.h src/areas.c: scripts/gen_area_data.py scripts/common.py
+	python3 $< $@
 
 .PHONY: clean
 
