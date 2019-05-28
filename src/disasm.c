@@ -74,9 +74,11 @@ uint32_t parse_uint32(uint8_t *bytes) {
 }
 
 bool should_print(parser_t *parser) {
-    for (size_t i = 0; i < INSTRUCTION_MAX_ARITY; i++) {
-        if (parser->cur_instr->args[i] == T_PUSH) {
-            return false;
+    if (parser->transform_args_to_immediate) {
+        for (size_t i = 0; i < INSTRUCTION_MAX_ARITY; i++) {
+            if (parser->cur_instr->args[i] == T_PUSH) {
+                return false;
+            }
         }
     }
     return true;
@@ -118,6 +120,7 @@ int print_arg(FILE *fd, arg_kind arg, uint8_t *bytes) {
         break;
     case T_WORD:
     case T_DATA:
+    case T_PFLAG:
         fprintf(fd, " %04x", parse_uint16(bytes));
         break;
     case T_FUNC:
@@ -134,6 +137,7 @@ int print_arg(FILE *fd, arg_kind arg, uint8_t *bytes) {
         print_str(fd, bytes);
         break;
     case T_SWITCH:
+    case T_SWITCH2B:
         {
             uint8_t *cursor = bytes;
             uint8_t len = *cursor;
@@ -226,7 +230,7 @@ int stack_pop(parser_t *parser) {
         }
     }
 
-    finalize_arg(parser, arg, &parser->stack[parser->stack_ptr]);
+    ret = finalize_arg(parser, arg, &parser->stack[parser->stack_ptr]);
 
     // move to next arg
     parser->stack_ptr += arg_sz;
@@ -238,16 +242,20 @@ int process_arg(parser_t *parser) {
     size_t arg_sz = arg_sizes[arg];
     int ret = 0;
     
-    switch (parser->stack_mode) {
-    case STACK_MODE_POP:
-        ret = stack_pop(parser);
-        break;
-    case STACK_MODE_PUSH:
-        ret = stack_push(parser);
-        break;
-    default:
-        finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
-        break;
+    if (parser->transform_args_to_immediate) {
+        switch (parser->stack_mode) {
+        case STACK_MODE_POP:
+            ret = stack_pop(parser);
+            break;
+        case STACK_MODE_PUSH:
+            ret = stack_push(parser);
+            break;
+        default:
+            ret = finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
+            break;
+        }
+    } else {
+        ret = finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
     }
 
     if (parser->stack_mode != STACK_MODE_POP) {
@@ -336,6 +344,12 @@ int parse_data(parser_t *parser) {
     case T_IMED:
         parser->stack_mode = STACK_MODE_IMMEDIATE;
         break;
+    case T_VASTART:
+        parser->transform_args_to_immediate = false;
+        break;
+    case T_VAEND:
+        parser->transform_args_to_immediate = true;
+        break;
     default:
         ret = process_arg(parser);
         break;
@@ -398,6 +412,7 @@ void disassemble(FILE *out_fd, bin_t *bin) {
     parser.out_fd = out_fd;
     parser.bin = bin;
     parser.label_flags = calloc(bin->function_offset_table_len, sizeof(label_flag));
+    parser.transform_args_to_immediate = true;
 
     begin_code_mode(&parser);
     

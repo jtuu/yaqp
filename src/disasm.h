@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "bin.h"
 #include "asm.h"
@@ -37,6 +38,7 @@ typedef struct parser {
     const instruction_t *cur_instr;
     size_t cur_arg;
     label_flag *label_flags;
+    bool transform_args_to_immediate;
 } parser_t;
 
 void disassemble(FILE *out_fd, bin_t *bin);
