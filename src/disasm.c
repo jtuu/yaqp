@@ -1,10 +1,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "bin.h"
 #include "utils.h"
 #include "disasm.h"
+#include "list.h"
 
 int find_label(parser_t *parser) {
     // dumb
@@ -73,6 +75,45 @@ uint32_t parse_uint32(uint8_t *bytes) {
     return LE32(bytes);
 }
 
+bool arg_kind_is_flag(arg_kind arg) {
+    switch (arg) {
+    case T_NONE:
+    case T_ARGS:
+    case T_IMED:
+    case T_VASTART:
+    case T_VAEND:
+    case T_V2:
+    case T_V3:
+    case T_V4:
+    case T_DC:
+        return true;
+    default:
+        return false;
+    }
+}
+
+int get_arg_size(argument_t *arg) {
+    int arg_sz = (int)  arg_sizes[arg->kind];
+
+    if (arg_sz == VARIABLE_SIZED) {
+        switch (arg->kind) {
+        case T_SWITCH:
+        case T_SWITCH2B:
+            arg_sz = (int) (arg->value.as_switch.length * sizeof(uint16_t) + 1);
+            break;
+        case T_STR:
+            arg_sz = (int) (arg->value.as_string.length * sizeof(uint16_t));
+            break;
+        default:
+            fprintf(stderr, "Unhandled variable sized argument: %d\n", arg->kind);
+            arg_sz = -1;
+            break;
+        }
+    }
+
+    return arg_sz;
+}
+
 bool should_print(parser_t *parser) {
     if (parser->transform_args_to_immediate) {
         for (size_t i = 0; i < INSTRUCTION_MAX_ARITY; i++) {
@@ -93,8 +134,8 @@ size_t str_len(uint8_t *bytes) {
     return len + 1;
 }
 
-void print_str(FILE *fd, uint8_t *bytes) {
-    uint16_t *cur = (uint16_t *) bytes;
+void print_str(FILE *fd, uint16_t *str_data) {
+    uint16_t *cur = str_data;
     fprintf(fd, " \"");
     do {
         switch (*cur) {
@@ -109,105 +150,67 @@ void print_str(FILE *fd, uint8_t *bytes) {
     fprintf(fd, "\"");
 }
 
-int print_arg(FILE *fd, arg_kind arg, uint8_t *bytes) {
-    switch (arg) {
+int print_arg(FILE *fd, argument_t *arg) {    
+    switch (arg->kind) {
     case T_BYTE:
-        fprintf(fd, " %02x", *bytes);
+        fprintf(fd, " %02x", arg->value.as_byte);
         break;
     case T_REG:
     case T_BREG:
-        fprintf(fd, " R%d", *bytes);
+        fprintf(fd, " R%d", arg->value.as_byte);
         break;
     case T_WORD:
-    case T_DATA:
     case T_PFLAG:
-        fprintf(fd, " %04x", parse_uint16(bytes));
+        fprintf(fd, " %04x", arg->value.as_word);
         break;
+    case T_DATA:
     case T_FUNC:
     case T_FUNC2:
-        fprintf(fd, " F%d", parse_uint16(bytes));
+        fprintf(fd, " F%d", arg->value.as_word);
         break;
     case T_DWORD:
-        fprintf(fd, " %08x", parse_uint32(bytes));
+        fprintf(fd, " %08x", arg->value.as_dword);
         break;
     case T_FLOAT:
-        fprintf(fd, " %f", parse_float(bytes));
+        fprintf(fd, " %f", arg->value.as_float);
         break;
     case T_STR:
-        print_str(fd, bytes);
+        print_str(fd, arg->value.as_string.data);
         break;
     case T_SWITCH:
     case T_SWITCH2B:
-        {
-            uint8_t *cursor = bytes;
-            uint8_t len = *cursor;
-            size_t stride = sizeof(uint16_t);
-            cursor++;
-            uint8_t *end = cursor + len * stride;
-            fprintf(fd, " %d", len);
-            for (; cursor != end ; cursor += stride) {
-                fprintf(fd, ":F%d", parse_uint16(cursor));
-            }
+        fprintf(fd, " %ld", arg->value.as_switch.length);
+        for (size_t i = 0; i < arg->value.as_switch.length; i++) {
+            fprintf(fd, ":F%d", arg->value.as_switch.functions[i]);
         }
         break;
     default:
-        fprintf(stderr, "Unhandled argument kind: %d\n", arg);
+        fprintf(stderr, "Unhandled argument kind: %d\n", arg->kind);
         return -1;
     }
 
     return 0;
 }
 
-int finalize_arg(parser_t *parser, arg_kind arg, uint8_t *arg_data) {
+int finalize_arg(parser_t *parser, argument_t *arg) {
     int ret = 0;
 
-    if (arg == T_DATA) {
-        parser->label_flags[parse_uint16(arg_data)] |= LABEL_RAW_DATA;
+    if (parser->cur_instr->args[parser->cur_arg] == T_DATA) {
+        parser->label_flags[arg->value.as_word] |= LABEL_RAW_DATA;
     }
 
     if (should_print(parser)) {
-        ret = print_arg(parser->out_fd, arg, arg_data);
+        ret = print_arg(parser->out_fd, arg);
     }
 
     return ret;
 }
 
-int stack_push(parser_t *parser) {
-    arg_kind arg = parser->cur_instr->args[parser->cur_arg];
-    size_t arg_sz = arg_sizes[arg];
+int stack_push(parser_t *parser, argument_t *arg) {
+    int key = parser->stack_head == NULL ? 0 : parser->stack_head->key + 1;
+    parser->stack_head = append_node(parser->stack_head, key, sizeof(argument_t), arg);
 
-    if (arg_sz == VARIABLE_SIZED) {
-        switch (arg) {
-        case T_STR:
-            arg_sz = str_len(&parser->bin->object_code[parser->obj_code_counter]) * sizeof(uint16_t);
-            break;
-        default:
-            fprintf(stderr, "Unhandled push of variable sized argument: %d\n", arg);
-            return -1;
-        }
-    }
-
-    // check if there's enough space
-    if (parser->stack_ptr + arg_sz > STACK_SIZE) {
-        fprintf(stderr, "Stack overflow\n");
-        return -1;
-    }
-
-    // push data from object code to stack
-    for (size_t i = parser->obj_code_counter; i < parser->obj_code_counter + arg_sz; i++) {
-        parser->stack[parser->stack_ptr++] = parser->bin->object_code[i];
-    }
-
-    if (arg == T_STR) {
-        // write string size to the end
-        parser->stack[parser->stack_ptr + 0] = (arg_sz >> 24) & 0xff;
-        parser->stack[parser->stack_ptr + 1] = (arg_sz >> 16) & 0xff;
-        parser->stack[parser->stack_ptr + 2] = (arg_sz >> 8) & 0xff;
-        parser->stack[parser->stack_ptr + 3] = arg_sz & 0xff;
-        parser->stack_ptr += 4;
-    }
-
-    finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
+    finalize_arg(parser, arg);
 
     return 0;
 }
@@ -215,32 +218,70 @@ int stack_push(parser_t *parser) {
 // doesn't actually pop in the traditional sense because we need to
 // take the args in the insertion order
 int stack_pop(parser_t *parser) {
-    arg_kind arg = parser->cur_instr->args[parser->cur_arg];
-    size_t arg_sz = arg_sizes[arg];
+    argument_t *arg = (argument_t *) parser->stack_head->data;
     int ret = 0;
 
-    if (arg_sz == VARIABLE_SIZED) {
-        switch (arg) {
-        case T_STR:
-            arg_sz = str_len(&parser->stack[parser->stack_ptr]) * sizeof(uint16_t) + 4;
-            break;
-        default:
-            fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
-            break;
-        }
-    }
-
-    ret = finalize_arg(parser, arg, &parser->stack[parser->stack_ptr]);
+    ret = finalize_arg(parser, arg);
 
     // move to next arg
-    parser->stack_ptr += arg_sz;
+    if (parser->stack_head->next != NULL) {
+        parser->stack_head = parser->stack_head->next;
+    }
+
     return ret;
 }
 
 int process_arg(parser_t *parser) {
-    arg_kind arg = parser->cur_instr->args[parser->cur_arg];
-    size_t arg_sz = arg_sizes[arg];
     int ret = 0;
+    argument_t arg = {
+        .kind = parser->cur_instr->args[parser->cur_arg]
+    };
+    uint8_t *obj_code_cursor = &parser->bin->object_code[parser->obj_code_counter];
+
+    switch (arg.kind) {
+    case T_BYTE:
+    case T_REG:
+    case T_BREG:
+        arg.value.as_byte = *obj_code_cursor;
+        break;
+    case T_WORD:
+    case T_DATA:
+    case T_PFLAG:
+    case T_FUNC:
+    case T_FUNC2:
+        arg.value.as_word = parse_uint16(obj_code_cursor);
+        break;
+    case T_DWORD:
+        arg.value.as_dword = parse_uint32(obj_code_cursor);
+        break;
+    case T_FLOAT:
+        arg.value.as_float = parse_float(obj_code_cursor);
+        break;
+    case T_STR:
+        {
+            size_t len = str_len(obj_code_cursor);
+            size_t sz = len * sizeof(uint16_t);
+            arg.value.as_string.length = len;
+            arg.value.as_string.data = malloc(sz);
+            memcpy(arg.value.as_string.data, obj_code_cursor, sz);
+        }
+        break;
+    case T_SWITCH:
+    case T_SWITCH2B:
+        {
+            size_t len = *obj_code_cursor;
+            size_t sz = len * sizeof(uint16_t);
+            arg.value.as_switch.length = len;
+            arg.value.as_switch.functions = malloc(sz);
+            for (size_t i = 0; i < len; i++, obj_code_cursor += sizeof(uint16_t)) {
+                arg.value.as_switch.functions[i] = parse_uint16(obj_code_cursor);
+            }
+        }
+        break;
+    default:
+        fprintf(stderr, "Unhandled argument kind: %d\n", arg.kind);
+        return -1;
+    }
     
     if (parser->transform_args_to_immediate) {
         switch (parser->stack_mode) {
@@ -248,40 +289,23 @@ int process_arg(parser_t *parser) {
             ret = stack_pop(parser);
             break;
         case STACK_MODE_PUSH:
-            ret = stack_push(parser);
+            ret = stack_push(parser, &arg);
             break;
         default:
-            ret = finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
+            ret = finalize_arg(parser, &arg);
             break;
         }
     } else {
-        ret = finalize_arg(parser, arg, &parser->bin->object_code[parser->obj_code_counter]);
+        ret = finalize_arg(parser, &arg);
     }
 
     if (parser->stack_mode != STACK_MODE_POP) {
         // move forward
-        if (arg_sz == VARIABLE_SIZED) {
-            switch (arg) {
-            case T_SWITCH:
-            case T_SWITCH2B:
-                // the size of a switch is determined by the first byte
-                parser->obj_code_counter += parser->bin->object_code[parser->obj_code_counter] * sizeof(uint16_t) + 1;
-                break;
-            case T_STR:
-                if (parser->transform_args_to_immediate) {
-                    // we encoded the length at the end of a string
-                    parser->obj_code_counter += BE32(&parser->stack[parser->stack_ptr - 4]);
-                } else {
-                    parser->obj_code_counter += str_len(&parser->bin->object_code[parser->obj_code_counter]) * sizeof(uint16_t);
-                }
-                break;
-            default:
-                fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
-                ret = -1;
-                break;
-            }
+        int arg_sz = get_arg_size(&arg);
+        if (arg_sz < 0) {
+            ret = arg_sz;
         } else {
-            parser->obj_code_counter += arg_sz;
+            parser->obj_code_counter += (size_t) arg_sz;
         }
     }
 
@@ -289,34 +313,27 @@ int process_arg(parser_t *parser) {
 }
 
 int rewind_stack(parser_t *parser) {
-    size_t args_sz_sum = 0;
+    node_t *head = parser->stack_head;
+    bool skipped_first = false;
 
     for (size_t i = INSTRUCTION_MAX_ARITY; i--;) {
         arg_kind arg = parser->cur_instr->args[i];
-        size_t arg_sz = arg_sizes[arg];
-
-        if (arg_sz == VARIABLE_SIZED) {
-            switch (arg) {
-            case T_STR:
-                // read the size at the end (move -4 bytes)
-                // and add the additional 4 bytes to the sum
-                args_sz_sum += (BE32(&parser->stack[parser->stack_ptr - args_sz_sum - 4])) + 4;
-                break;
-            default:
-                fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
-                break;
+        
+        if (!arg_kind_is_flag(arg)) {
+            if (skipped_first) {
+                if (head->prev == NULL) {
+                    fprintf(stderr, "Stack underflow\n");
+                    return -1;
+                }
+                
+                head = head->prev;
+            } else {
+                skipped_first = true;
             }
-        } else {
-            args_sz_sum += arg_sz;
         }
     }
 
-    if (parser->stack_ptr - args_sz_sum > parser->stack_ptr) {
-        fprintf(stderr, "Stack underflow\n");
-        return -1;
-    }
-
-    parser->stack_ptr -= args_sz_sum;
+    parser->stack_head = head;
 
     return 0;
 }
@@ -337,6 +354,7 @@ int parse_data(parser_t *parser) {
         if (parser->stack_mode == STACK_MODE_POP && parser->transform_args_to_immediate) {
             // need to move stack pointer back to the real head after popping
             ret = rewind_stack(parser);
+            dispose_nodes(parser->stack_head);
         }
         end_data(parser);
         break;
