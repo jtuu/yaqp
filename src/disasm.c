@@ -263,12 +263,17 @@ int process_arg(parser_t *parser) {
         if (arg_sz == VARIABLE_SIZED) {
             switch (arg) {
             case T_SWITCH:
+            case T_SWITCH2B:
                 // the size of a switch is determined by the first byte
                 parser->obj_code_counter += parser->bin->object_code[parser->obj_code_counter] * sizeof(uint16_t) + 1;
                 break;
             case T_STR:
-                // we encoded the length at the end of a string
-                parser->obj_code_counter += BE32(&parser->stack[parser->stack_ptr - 4]);
+                if (parser->transform_args_to_immediate) {
+                    // we encoded the length at the end of a string
+                    parser->obj_code_counter += BE32(&parser->stack[parser->stack_ptr - 4]);
+                } else {
+                    parser->obj_code_counter += str_len(&parser->bin->object_code[parser->obj_code_counter]) * sizeof(uint16_t);
+                }
                 break;
             default:
                 fprintf(stderr, "Unhandled variable sized argument: %d\n", arg);
@@ -316,27 +321,35 @@ int rewind_stack(parser_t *parser) {
     return 0;
 }
 
+void end_data(parser_t *parser) {
+    if (should_print(parser)) {
+        fprintf(parser->out_fd, "\n");
+    }
+    begin_code_mode(parser);
+}
+
 int parse_data(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     int ret = 0;
 
     switch (arg) {
     case T_NONE:
-        if (parser->stack_mode == STACK_MODE_POP) {
+        if (parser->stack_mode == STACK_MODE_POP && parser->transform_args_to_immediate) {
             // need to move stack pointer back to the real head after popping
             ret = rewind_stack(parser);
         }
-        if (should_print(parser)) {
-            fprintf(parser->out_fd, "\n");
-        }
-        begin_code_mode(parser);
+        end_data(parser);
         break;
     case T_ARGS:
         parser->stack_mode = STACK_MODE_POP;
-        // we need to take the args in the insertion order
-        // so let's move the stack pointer all the way back
-        // to where the arguments for this function start
-        ret = rewind_stack(parser);
+        if (parser->transform_args_to_immediate) {
+            // we need to take the args in the insertion order
+            // so let's move the stack pointer all the way back
+            // to where the arguments for this function start
+            ret = rewind_stack(parser);
+        } else {
+            end_data(parser);
+        }
         break;
     case T_PUSH:
         parser->stack_mode = STACK_MODE_PUSH;
