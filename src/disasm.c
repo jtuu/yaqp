@@ -14,8 +14,10 @@ void dispose_arg(argument_t *arg) {
         free(arg->value.as_string.data);
         break;
     case T_SWITCH:
+        free(arg->value.as_fn_switch.functions);
+        break;
     case T_SWITCH2B:
-        free(arg->value.as_switch.functions);
+        free(arg->value.as_reg_switch.registers);
         break;
     default:
         break;
@@ -128,8 +130,10 @@ int get_arg_size(argument_t *arg) {
     if (arg_sz == VARIABLE_SIZED) {
         switch (arg->kind) {
         case T_SWITCH:
+            arg_sz = (int) (arg->value.as_fn_switch.length * sizeof(uint16_t) + 1);
+            break;
         case T_SWITCH2B:
-            arg_sz = (int) (arg->value.as_switch.length * sizeof(uint16_t) + 1);
+            arg_sz = (int) (arg->value.as_reg_switch.length + 1);
             break;
         case T_STR:
             arg_sz = (int) (arg->value.as_string.length * sizeof(uint16_t));
@@ -209,10 +213,15 @@ int print_arg(FILE *fd, argument_t *arg) {
         print_str(fd, arg->value.as_string.data);
         break;
     case T_SWITCH:
+        fprintf(fd, " %ld", arg->value.as_fn_switch.length);
+        for (size_t i = 0; i < arg->value.as_fn_switch.length; i++) {
+            fprintf(fd, ":F%d", arg->value.as_fn_switch.functions[i]);
+        }
+        break;
     case T_SWITCH2B:
-        fprintf(fd, " %ld", arg->value.as_switch.length);
-        for (size_t i = 0; i < arg->value.as_switch.length; i++) {
-            fprintf(fd, ":F%d", arg->value.as_switch.functions[i]);
+        fprintf(fd, " %ld", arg->value.as_reg_switch.length);
+        for (size_t i = 0; i < arg->value.as_reg_switch.length; i++) {
+            fprintf(fd, ":R%d", arg->value.as_reg_switch.registers[i]);
         }
         break;
     default:
@@ -315,15 +324,25 @@ int process_arg(parser_t *parser) {
             }
             break;
         case T_SWITCH:
-        case T_SWITCH2B:
             {
                 size_t len = *obj_code_cursor;
                 obj_code_cursor++;
                 size_t sz = len * sizeof(uint16_t);
-                arg.value.as_switch.length = len;
-                arg.value.as_switch.functions = malloc(sz);
+                arg.value.as_fn_switch.length = len;
+                arg.value.as_fn_switch.functions = malloc(sz);
                 for (size_t i = 0; i < len; i++, obj_code_cursor += sizeof(uint16_t)) {
-                    arg.value.as_switch.functions[i] = parse_uint16(obj_code_cursor);
+                    arg.value.as_fn_switch.functions[i] = parse_uint16(obj_code_cursor);
+                }
+            }
+            break;
+        case T_SWITCH2B:
+            {
+                size_t len = *obj_code_cursor;
+                obj_code_cursor++;
+                arg.value.as_reg_switch.length = len;
+                arg.value.as_reg_switch.registers = malloc(len);
+                for (size_t i = 0; i < len; i++, obj_code_cursor++) {
+                    arg.value.as_reg_switch.registers[i] = *obj_code_cursor;
                 }
             }
             break;

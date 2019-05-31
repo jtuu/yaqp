@@ -54,7 +54,11 @@ typedef struct argument {
         struct {
             size_t length;
             uint16_t *functions;
-        } as_switch;
+        } as_fn_switch;
+        struct {
+            size_t length;
+            uint8_t *registers;
+        } as_reg_switch;
     } value;
 } argument_t;
 
