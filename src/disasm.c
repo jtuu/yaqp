@@ -265,11 +265,26 @@ int stack_push(parser_t *parser, argument_t *arg) {
     return 0;
 }
 
+int verify_stack_head(parser_t *parser) {
+    if (parser->stack_head == NULL) {
+        fprintf(stderr, "Invalid stack state, switching to raw output\n");
+        parser->label_flags[parser->cur_label] |= LABEL_RAW_DATA;
+        begin_raw_mode(parser);
+        return -1;
+    }
+    return 0;
+}
+
 // doesn't actually pop in the traditional sense because we need to
 // take the args in the insertion order
 int stack_pop(parser_t *parser) {
-    argument_t *arg = (argument_t *) parser->stack_head->data;
     int ret = 0;
+
+    if (verify_stack_head(parser) < 0) {
+        return ret;
+    }
+
+    argument_t *arg = (argument_t *) parser->stack_head->data;
 
     ret = finalize_arg(parser, arg);
 
@@ -386,6 +401,10 @@ int process_arg(parser_t *parser) {
 }
 
 int rewind_stack(parser_t *parser) {
+    if (verify_stack_head(parser) < 0) {
+        return 0;
+    }
+
     node_t *head = parser->stack_head;
     bool skipped_first = false;
 
@@ -470,6 +489,7 @@ int parse_code(parser_t *parser) {
     int label = find_label(parser);
 
     if (label != -1) {
+        parser->cur_label = label;
         fprintf(parser->out_fd, "F%d:\n", label);
 
         if (parser->label_flags[label] & LABEL_RAW_DATA) {

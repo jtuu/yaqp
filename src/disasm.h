@@ -38,6 +38,7 @@ typedef struct parser {
     size_t cur_arg;
     label_flag *label_flags;
     bool transform_args_to_immediate;
+    int32_t cur_label;
 } parser_t;
 
 typedef struct argument {
