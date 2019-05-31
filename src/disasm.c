@@ -8,6 +8,37 @@
 #include "disasm.h"
 #include "list.h"
 
+void dispose_arg(argument_t *arg) {
+    switch (arg->kind) {
+    case T_STR:
+        free(arg->value.as_string.data);
+        break;
+    case T_SWITCH:
+    case T_SWITCH2B:
+        free(arg->value.as_switch.functions);
+        break;
+    default:
+        break;
+    }
+}
+
+void dispose_stack(parser_t *parser) {
+    node_t *cursor = parser->stack_head;
+    node_t *tmp;
+
+    while (cursor != NULL) {
+        argument_t *arg = (argument_t *) cursor->data;
+        dispose_arg(arg);
+
+        tmp = cursor->next;
+        free(cursor->data);
+        free(cursor);
+        cursor = tmp;
+    }
+    
+    parser->stack_head = NULL;
+}
+
 int find_label(parser_t *parser) {
     // dumb
     for (unsigned j = 0; j < parser->bin->function_offset_table_len; j++) {
@@ -215,6 +246,9 @@ int finalize_arg(parser_t *parser, argument_t *arg) {
 
 int stack_push(parser_t *parser, argument_t *arg) {
     int key = parser->stack_head == NULL ? 0 : parser->stack_head->key + 1;
+    // keep in mind that append_node does a memcpy on the data
+    // so the argument object itself can be freed but any other pointers inside should not...
+    // kinda bad
     parser->stack_head = append_node(parser->stack_head, key, sizeof(argument_t), arg);
 
     finalize_arg(parser, arg);
@@ -240,58 +274,74 @@ int stack_pop(parser_t *parser) {
 
 int process_arg(parser_t *parser) {
     int ret = 0;
+
     argument_t arg = {
         .kind = parser->cur_instr->args[parser->cur_arg]
     };
-    uint8_t *obj_code_cursor = &parser->bin->object_code[parser->obj_code_counter];
+    
+    // in pop mode we take arguments from the stack and not from the object code
+    // so no need to move forward in the object code or init the argument object
+    if (parser->stack_mode != STACK_MODE_POP) {
+        uint8_t *obj_code_cursor = &parser->bin->object_code[parser->obj_code_counter];
 
-    switch (arg.kind) {
-    case T_BYTE:
-    case T_REG:
-    case T_BREG:
-        arg.value.as_byte = *obj_code_cursor;
-        break;
-    case T_WORD:
-    case T_DATA:
-    case T_STRDATA:
-    case T_PFLAG:
-    case T_FUNC:
-    case T_FUNC2:
-        arg.value.as_word = parse_uint16(obj_code_cursor);
-        break;
-    case T_DWORD:
-        arg.value.as_dword = parse_uint32(obj_code_cursor);
-        break;
-    case T_FLOAT:
-        arg.value.as_float = parse_float(obj_code_cursor);
-        break;
-    case T_STR:
-        {
-            size_t len = str_len(obj_code_cursor);
-            size_t sz = len * sizeof(uint16_t);
-            arg.value.as_string.length = len;
-            arg.value.as_string.data = malloc(sz);
-            memcpy(arg.value.as_string.data, obj_code_cursor, sz);
-        }
-        break;
-    case T_SWITCH:
-    case T_SWITCH2B:
-        {
-            size_t len = *obj_code_cursor;
-            obj_code_cursor++;
-            size_t sz = len * sizeof(uint16_t);
-            arg.value.as_switch.length = len;
-            arg.value.as_switch.functions = malloc(sz);
-            for (size_t i = 0; i < len; i++, obj_code_cursor += sizeof(uint16_t)) {
-                arg.value.as_switch.functions[i] = parse_uint16(obj_code_cursor);
+        // init argument object
+        switch (arg.kind) {
+        case T_BYTE:
+        case T_REG:
+        case T_BREG:
+            arg.value.as_byte = *obj_code_cursor;
+            break;
+        case T_WORD:
+        case T_DATA:
+        case T_STRDATA:
+        case T_PFLAG:
+        case T_FUNC:
+        case T_FUNC2:
+            arg.value.as_word = parse_uint16(obj_code_cursor);
+            break;
+        case T_DWORD:
+            arg.value.as_dword = parse_uint32(obj_code_cursor);
+            break;
+        case T_FLOAT:
+            arg.value.as_float = parse_float(obj_code_cursor);
+            break;
+        case T_STR:
+            {
+                size_t len = str_len(obj_code_cursor);
+                size_t sz = len * sizeof(uint16_t);
+                arg.value.as_string.length = len;
+                arg.value.as_string.data = malloc(sz);
+                memcpy(arg.value.as_string.data, obj_code_cursor, sz);
             }
+            break;
+        case T_SWITCH:
+        case T_SWITCH2B:
+            {
+                size_t len = *obj_code_cursor;
+                obj_code_cursor++;
+                size_t sz = len * sizeof(uint16_t);
+                arg.value.as_switch.length = len;
+                arg.value.as_switch.functions = malloc(sz);
+                for (size_t i = 0; i < len; i++, obj_code_cursor += sizeof(uint16_t)) {
+                    arg.value.as_switch.functions[i] = parse_uint16(obj_code_cursor);
+                }
+            }
+            break;
+        default:
+            fprintf(stderr, "Unhandled argument kind: %d\n", arg.kind);
+            return -1;
         }
-        break;
-    default:
-        fprintf(stderr, "Unhandled argument kind: %d\n", arg.kind);
-        return -1;
+
+        // move forward in the object code
+        int arg_sz = get_arg_size(&arg);
+        if (arg_sz < 0) {
+            ret = arg_sz;
+        } else {
+            parser->obj_code_counter += (size_t) arg_sz;
+        }
     }
     
+    // qedit style hidden arg_push* opcodes
     if (parser->transform_args_to_immediate) {
         switch (parser->stack_mode) {
         case STACK_MODE_POP:
@@ -308,14 +358,9 @@ int process_arg(parser_t *parser) {
         ret = finalize_arg(parser, &arg);
     }
 
-    if (parser->stack_mode != STACK_MODE_POP) {
-        // move forward
-        int arg_sz = get_arg_size(&arg);
-        if (arg_sz < 0) {
-            ret = arg_sz;
-        } else {
-            parser->obj_code_counter += (size_t) arg_sz;
-        }
+    // don't dispose because we just pushed it to the stack and it will be used later
+    if (parser->stack_mode != STACK_MODE_PUSH) {
+        dispose_arg(&arg);
     }
 
     return ret;
@@ -363,7 +408,7 @@ int parse_data(parser_t *parser) {
         if (parser->stack_mode == STACK_MODE_POP && parser->transform_args_to_immediate) {
             // need to move stack pointer back to the real head after popping
             ret = rewind_stack(parser);
-            dispose_nodes(parser->stack_head);
+            dispose_stack(parser);
         }
         end_data(parser);
         break;
@@ -488,15 +533,6 @@ int parser_loop(parser_t *parser) {
         }
     }
     return ret;
-}
-
-void dispose_stack(parser_t *parser) {
-    if (parser->stack_head != NULL) {
-        dispose_nodes(parser->stack_head);
-        free(parser->stack_head->data);
-        free(parser->stack_head);
-        parser->stack_head = NULL;
-    }
 }
 
 int disassemble(FILE *out_fd, bin_t *bin) {
