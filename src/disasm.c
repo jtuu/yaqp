@@ -270,6 +270,7 @@ int process_arg(parser_t *parser) {
     case T_SWITCH2B:
         {
             size_t len = *obj_code_cursor;
+            obj_code_cursor++;
             size_t sz = len * sizeof(uint16_t);
             arg.value.as_switch.length = len;
             arg.value.as_switch.functions = malloc(sz);
