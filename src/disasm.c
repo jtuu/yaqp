@@ -59,12 +59,7 @@ void begin_raw_mode(parser_t *parser) {
 }
 
 float parse_float(uint8_t *bytes) {
-    const size_t float_sz = 4;
-    uint8_t cp[float_sz];
-    for (size_t i = 0; i < float_sz; i++) {
-        cp[float_sz - i - 1] = *(bytes + i);
-    }
-    return *(float *) (&cp);
+    return *(float *) bytes;
 }
 
 uint16_t parse_uint16(uint8_t *bytes) {
