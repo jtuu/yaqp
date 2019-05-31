@@ -463,29 +463,21 @@ int parse_raw_string(parser_t *parser) {
     return 0;
 }
 
-void disassemble(FILE *out_fd, bin_t *bin) {
-    parser_t parser = {0};
-    parser.out_fd = out_fd;
-    parser.bin = bin;
-    parser.label_flags = calloc(bin->function_offset_table_len, sizeof(label_flag));
-    parser.transform_args_to_immediate = true;
-
-    begin_code_mode(&parser);
-    
-    while (parser.obj_code_counter < bin->object_code_len) {
-        int ret = 0;
-        switch (parser.parse_mode) {
+int parser_loop(parser_t *parser) {
+    int ret = 0;
+    while (parser->obj_code_counter < parser->bin->object_code_len) {
+        switch (parser->parse_mode) {
         case PARSE_MODE_CODE:
-            ret = parse_code(&parser);
+            ret = parse_code(parser);
             break;
         case PARSE_MODE_DATA:
-            ret = parse_data(&parser);
+            ret = parse_data(parser);
             break;
         case PARSE_MODE_RAW:
-            ret = parse_raw(&parser);
+            ret = parse_raw(parser);
             break;
         case PARSE_MODE_STRING:
-            ret = parse_raw_string(&parser);
+            ret = parse_raw_string(parser);
             break;
         default:
             break;
@@ -495,6 +487,43 @@ void disassemble(FILE *out_fd, bin_t *bin) {
             break;
         }
     }
+    return ret;
+}
 
+void dispose_stack(parser_t *parser) {
+    if (parser->stack_head != NULL) {
+        dispose_nodes(parser->stack_head);
+        free(parser->stack_head->data);
+        free(parser->stack_head);
+        parser->stack_head = NULL;
+    }
+}
+
+int disassemble(FILE *out_fd, bin_t *bin) {
+    parser_t parser = {0};
+    parser.bin = bin;
+    parser.label_flags = calloc(bin->function_offset_table_len, sizeof(label_flag));
+    parser.transform_args_to_immediate = true;
+
+    // do a dry run to figure out label flags
+    parser.out_fd = fopen("/dev/null", "w");
+    begin_code_mode(&parser);
+    int dry_ret = parser_loop(&parser);
+    dispose_stack(&parser);
+    fclose(parser.out_fd);
+
+    if (dry_ret < 0) {
+        fprintf(stderr, "Disassembler dry run failed\n");
+        return dry_ret;
+    }
+
+    // real run
+    parser.out_fd = out_fd;
+    parser.obj_code_counter = 0;
+    begin_code_mode(&parser);
+    int ret = parser_loop(&parser);
+    dispose_stack(&parser);
     free(parser.label_flags);
+
+    return ret;
 }

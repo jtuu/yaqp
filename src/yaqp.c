@@ -1024,10 +1024,10 @@ int main(int argc, char *argv[]) {
                 out_file = fopen(dest_file_name, "w");
 
                 if (out_file) {
-                    disassemble(out_file, bin);
+                    int ret = disassemble(out_file, bin);
                     fclose(out_file);
 
-                    if (opts[VERBOSE]) {
+                    if (ret == 0 && opts[VERBOSE]) {
                         printf("%s\n", dest_file_name);
                     }
                 } else {

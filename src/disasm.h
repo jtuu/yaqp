@@ -58,6 +58,6 @@ typedef struct argument {
     } value;
 } argument_t;
 
-void disassemble(FILE *out_fd, bin_t *bin);
+int disassemble(FILE *out_fd, bin_t *bin);
 
 #endif
