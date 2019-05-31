@@ -7,6 +7,7 @@
 
 #include "bin.h"
 #include "asm.h"
+#include "list.h"
 
 typedef enum {
     PARSE_MODE_CODE,
@@ -24,22 +25,36 @@ typedef enum {
     LABEL_RAW_DATA = 1 << 0
 } label_flag;
 
-// idk
-#define STACK_SIZE 1024
-
 typedef struct parser {
     FILE *out_fd;
     bin_t *bin;
     size_t obj_code_counter;
     parse_mode_kind parse_mode;
     stack_mode_kind stack_mode;
-    uint8_t stack[STACK_SIZE];
-    size_t stack_ptr;
+    node_t *stack_head;
     const instruction_t *cur_instr;
     size_t cur_arg;
     label_flag *label_flags;
     bool transform_args_to_immediate;
 } parser_t;
+
+typedef struct argument {
+    arg_kind kind;
+    union {
+        uint8_t as_byte;
+        uint16_t as_word;
+        uint32_t as_dword;
+        float as_float;
+        struct {
+            size_t length;
+            uint16_t *data;
+        } as_string;
+        struct {
+            size_t length;
+            uint16_t *functions;
+        } as_switch;
+    } value;
+} argument_t;
 
 void disassemble(FILE *out_fd, bin_t *bin);
 

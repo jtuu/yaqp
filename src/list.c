@@ -22,14 +22,19 @@ node_t* prepend_node(node_t *head, int key, size_t data_sz, void *data) {
 
 node_t* append_node(node_t *head, int key, size_t data_sz, void *data) {
     node_t *cursor = head;
-    while (cursor->next != NULL) {
-        cursor = cursor->next;
+    if (cursor != NULL) {
+        while (cursor->next != NULL) {
+            cursor = cursor->next;
+        }
     }
 
     node_t *new_node = create_node(key, data_sz, data, NULL);
-    cursor->next = new_node;
+    if (cursor != NULL) {
+        cursor->next = new_node;
+    }
+    new_node->prev = cursor;
 
-    return head;
+    return new_node;
 }
 
 node_t* find_node(node_t *head, int key) {
