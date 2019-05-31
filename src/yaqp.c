@@ -1033,6 +1033,8 @@ int main(int argc, char *argv[]) {
                 } else {
                     fprintf(stderr, "Failed to write file %s\n", dest_file_name);
                 }
+
+                free(dest_file_name);
             }
 
             free(dat_data);
