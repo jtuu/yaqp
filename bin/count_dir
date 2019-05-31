@@ -1,5 +1,0 @@
-#!/bin/bash
-
-input_dir=$1
-mapfile -t files < <(find "$input_dir" -name \*.qst -print)
-./bin/yaqp -vp "${files[@]}"

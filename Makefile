@@ -50,7 +50,8 @@ $(GEN_SRC) \
 
 # find corresponding object files for source files
 ODIR := obj
-OBJ := $(foreach path,$(SRC),$(patsubst %.c,$(ODIR)/%.o,$(call shift-path,$(path))))
+OBJ_RELEASE := $(foreach path,$(SRC),$(patsubst %.c,$(ODIR)/release/%.o,$(call shift-path,$(path))))
+OBJ_DEBUG := $(foreach path,$(SRC),$(patsubst %.c,$(ODIR)/debug/%.o,$(call shift-path,$(path))))
 
 CFLAGS_DIAG := \
 -Werror \
@@ -75,22 +76,44 @@ CFLAGS := \
 -march=native \
 -std=c99 \
 -Ilib/include \
--Isrc -g
+-Isrc
 # end CFLAGS
 
-# link
-bin/yaqp: $(OBJ) $(DEPS)
+CFLAGS_DEBUG := -g
+
+.DEFAULT_GOAL: bin/release/yaqp
+
+# link release
+bin/release/yaqp: $(OBJ_RELEASE) $(DEPS)
+	@mkdir -p bin/release
 	$(CC) -o $@ $^ $(CFLAGS)
 
-# compile src
-$(ODIR)/src/%.o: src/%.c
-	@mkdir -p $(ODIR)/src
+# compile src release
+$(ODIR)/release/src/%.o: src/%.c
+	@mkdir -p $(ODIR)/release/src
 	$(CC) -c -o $@ $< $(CFLAGS_DIAG) $(CFLAGS)
 
-# compile lib
-$(ODIR)/lib/%.o: lib/%.c
-	@mkdir -p $(ODIR)/lib
+# compile lib release
+$(ODIR)/release/lib/%.o: lib/%.c
+	@mkdir -p $(ODIR)/release/lib
 	$(CC) -c -o $@ $< $(CFLAGS)
+
+debug: bin/debug/yaqp
+
+# link debug
+bin/debug/yaqp: $(OBJ_DEBUG) $(DEPS)
+	@mkdir -p bin/debug
+	$(CC) -o $@ $^ $(CFLAGS) $(CFLAGS_DEBUG)
+
+# compile src debug
+$(ODIR)/debug/src/%.o: src/%.c
+	@mkdir -p $(ODIR)/debug/src
+	$(CC) -c -o $@ $< $(CFLAGS_DIAG) $(CFLAGS) $(CFLAGS_DEBUG)
+
+# compile lib debug
+$(ODIR)/debug/lib/%.o: lib/%.c
+	@mkdir -p $(ODIR)/debug/lib
+	$(CC) -c -o $@ $< $(CFLAGS) $(CFLAGS_DEBUG)
 
 # generate sources
 src/mon.h src/mon.c: scripts/gen_mon_data.py scripts/common.py
@@ -102,4 +125,4 @@ src/areas.h src/areas.c: scripts/gen_area_data.py scripts/common.py
 .PHONY: clean
 
 clean:
-	rm $(ODIR)/**/*.o
+	rm $(ODIR)/**/**/*.o
