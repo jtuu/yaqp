@@ -30,5 +30,6 @@ bin_t* parse_bin(size_t data_len, uint8_t *data) {
 
 void dispose_bin(bin_t *bin) {
     free(bin->object_code);
+    free(bin->function_offset_table);
     free(bin);
 }
