@@ -12,7 +12,8 @@
 typedef enum {
     PARSE_MODE_CODE,
     PARSE_MODE_DATA,
-    PARSE_MODE_RAW
+    PARSE_MODE_RAW,
+    PARSE_MODE_STRING
 } parse_mode_kind;
 
 typedef enum {
@@ -22,7 +23,8 @@ typedef enum {
 } stack_mode_kind;
 
 typedef enum {
-    LABEL_RAW_DATA = 1 << 0
+    LABEL_RAW_DATA = 1 << 0,
+    LABEL_RAW_STRING = 1 << 1
 } label_flag;
 
 typedef struct parser {

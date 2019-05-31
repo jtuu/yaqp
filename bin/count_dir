@@ -2,4 +2,4 @@
 
 input_dir=$1
 mapfile -t files < <(find "$input_dir" -name \*.qst -print)
-./bin/yaqp "${files[@]}"
+./bin/yaqp -vp "${files[@]}"

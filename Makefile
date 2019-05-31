@@ -75,7 +75,7 @@ CFLAGS := \
 -march=native \
 -std=c99 \
 -Ilib/include \
--Isrc
+-Isrc -g
 # end CFLAGS
 
 # link

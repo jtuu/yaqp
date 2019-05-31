@@ -27,7 +27,7 @@ const size_t arg_sizes[NUM_ARG_KINDS] = {
     [T_SWITCH]   = VARIABLE_SIZED,
     [T_SWITCH2B] = VARIABLE_SIZED,
     [T_DATA]     = 2,
-    [T_STRDATA]  = 0
+    [T_STRDATA]  = 2
 };
 
 const instruction_t instructions[NUM_INSTRUCTIONS] = {

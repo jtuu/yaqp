@@ -58,6 +58,10 @@ void begin_raw_mode(parser_t *parser) {
     parser->parse_mode = PARSE_MODE_RAW;
 }
 
+void begin_string_mode(parser_t *parser) {
+    parser->parse_mode = PARSE_MODE_STRING;
+}
+
 float parse_float(uint8_t *bytes) {
     return *(float *) bytes;
 }
@@ -159,6 +163,7 @@ int print_arg(FILE *fd, argument_t *arg) {
         fprintf(fd, " %04x", arg->value.as_word);
         break;
     case T_DATA:
+    case T_STRDATA:
     case T_FUNC:
     case T_FUNC2:
         fprintf(fd, " F%d", arg->value.as_word);
@@ -190,8 +195,15 @@ int print_arg(FILE *fd, argument_t *arg) {
 int finalize_arg(parser_t *parser, argument_t *arg) {
     int ret = 0;
 
-    if (parser->cur_instr->args[parser->cur_arg] == T_DATA) {
+    switch (parser->cur_instr->args[parser->cur_arg]) {
+    case T_DATA:
         parser->label_flags[arg->value.as_word] |= LABEL_RAW_DATA;
+        break;
+    case T_STRDATA:
+        parser->label_flags[arg->value.as_word] |= LABEL_RAW_STRING;
+        break;
+    default:
+        break;
     }
 
     if (should_print(parser)) {
@@ -241,6 +253,7 @@ int process_arg(parser_t *parser) {
         break;
     case T_WORD:
     case T_DATA:
+    case T_STRDATA:
     case T_PFLAG:
     case T_FUNC:
     case T_FUNC2:
@@ -398,6 +411,9 @@ int parse_code(parser_t *parser) {
         if (parser->label_flags[label] & LABEL_RAW_DATA) {
             begin_raw_mode(parser);
             return ret;
+        } else if (parser->label_flags[label] & LABEL_RAW_STRING) {
+            begin_string_mode(parser);
+            return ret;
         }
     }
     
@@ -434,6 +450,19 @@ int parse_raw(parser_t *parser) {
     return ret;
 }
 
+int parse_raw_string(parser_t *parser) {
+    uint8_t *obj_code_cursor = &parser->bin->object_code[parser->obj_code_counter];
+    fprintf(parser->out_fd, "    STR:");
+    print_str(parser->out_fd, (uint16_t *) obj_code_cursor);
+    fprintf(parser->out_fd, "\n");
+
+    parser->obj_code_counter += str_len(obj_code_cursor) * sizeof(uint16_t);
+
+    begin_code_mode(parser);
+
+    return 0;
+}
+
 void disassemble(FILE *out_fd, bin_t *bin) {
     parser_t parser = {0};
     parser.out_fd = out_fd;
@@ -454,6 +483,9 @@ void disassemble(FILE *out_fd, bin_t *bin) {
             break;
         case PARSE_MODE_RAW:
             ret = parse_raw(&parser);
+            break;
+        case PARSE_MODE_STRING:
+            ret = parse_raw_string(&parser);
             break;
         default:
             break;
