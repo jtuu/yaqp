@@ -80,7 +80,7 @@ CFLAGS := \
 # end CFLAGS
 
 CFLAGS_RELEASE := -O3
-CFLAGS_DEBUG := -g
+CFLAGS_DEBUG := -g -pg
 
 .DEFAULT_GOAL: bin/release/yaqp
 

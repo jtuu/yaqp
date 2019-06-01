@@ -9,3 +9,4 @@ obj
 *.pasm
 *.pyc
 callgrind.out.*
+gmon.out
