@@ -8,3 +8,4 @@ obj
 *.json
 *.pasm
 *.pyc
+callgrind.out.*

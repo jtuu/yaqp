@@ -79,6 +79,7 @@ CFLAGS := \
 -Isrc
 # end CFLAGS
 
+CFLAGS_RELEASE := -O3
 CFLAGS_DEBUG := -g
 
 .DEFAULT_GOAL: bin/release/yaqp
@@ -86,17 +87,17 @@ CFLAGS_DEBUG := -g
 # link release
 bin/release/yaqp: $(OBJ_RELEASE) $(DEPS)
 	@mkdir -p bin/release
-	$(CC) -o $@ $^ $(CFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) $(CFLAGS_RELEASE)
 
 # compile src release
 $(ODIR)/release/src/%.o: src/%.c
 	@mkdir -p $(ODIR)/release/src
-	$(CC) -c -o $@ $< $(CFLAGS_DIAG) $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS_DIAG) $(CFLAGS) $(CFLAGS_RELEASE)
 
 # compile lib release
 $(ODIR)/release/lib/%.o: lib/%.c
 	@mkdir -p $(ODIR)/release/lib
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(CFLAGS_RELEASE)
 
 debug: bin/debug/yaqp
 
