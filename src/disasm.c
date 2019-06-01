@@ -41,13 +41,29 @@ void dispose_stack(parser_t *parser) {
     parser->stack_head = NULL;
 }
 
-int find_label(parser_t *parser) {
-    // dumb
-    for (unsigned j = 0; j < parser->bin->function_offset_table_len; j++) {
-        int32_t offset = parser->bin->function_offset_table[j];
-        if (offset != -1 && (size_t) offset == parser->obj_code_counter) {
-            return (int) j;
+int find_next_label(parser_t *parser) {
+    if (parser->cur_label == -1) {
+        // find the first one that matches current position
+        for (size_t label = 0; label < parser->bin->function_offset_table_len; label++) {
+            int32_t offset = parser->bin->function_offset_table[label];
+            if (offset != -1 && (size_t) offset == parser->obj_code_counter) {
+                return (int) label;
+            }
         }
+    } else {
+        // find next label aka the label with the smallest ofset that is still greater than the current offset
+        bool any_found = false;
+        size_t next_label = SIZE_MAX;
+        int32_t smallest = INT32_MAX;
+        for (size_t label = 0; label < parser->bin->function_offset_table_len; label++) {
+            int32_t offset = parser->bin->function_offset_table[label];
+            if (offset != -1 && (size_t) offset > parser->obj_code_counter && offset < smallest) {
+                any_found = true;
+                smallest = offset;
+                next_label = label;
+            }
+        }
+        return any_found ? (int) next_label : -1;
     }
     return -1;
 }
@@ -68,9 +84,9 @@ bool find_instruction(parser_t *parser) {
         break;
     }
     // find instruction data from global table
-    for (unsigned int j = 0; j < NUM_INSTRUCTIONS; j++) {
-        if (instructions[j].opcode == opcode) {
-            parser->cur_instr = &instructions[j];
+    for (unsigned int label = 0; label < NUM_INSTRUCTIONS; label++) {
+        if (instructions[label].opcode == opcode) {
+            parser->cur_instr = &instructions[label];
             return true;
         }
     }
@@ -265,10 +281,18 @@ int stack_push(parser_t *parser, argument_t *arg) {
     return 0;
 }
 
+void end_data(parser_t *parser) {
+    if (should_print(parser)) {
+        fprintf(parser->out_fd, "\n");
+    }
+    begin_code_mode(parser);
+}
+
 int verify_stack_head(parser_t *parser) {
     if (parser->stack_head == NULL) {
         fprintf(stderr, "Invalid stack state, switching to raw output\n");
         parser->label_flags[parser->cur_label] |= LABEL_RAW_DATA;
+        end_data(parser);
         begin_raw_mode(parser);
         return -1;
     }
@@ -430,13 +454,6 @@ int rewind_stack(parser_t *parser) {
     return 0;
 }
 
-void end_data(parser_t *parser) {
-    if (should_print(parser)) {
-        fprintf(parser->out_fd, "\n");
-    }
-    begin_code_mode(parser);
-}
-
 int parse_data(parser_t *parser) {
     arg_kind arg = parser->cur_instr->args[parser->cur_arg];
     int ret = 0;
@@ -486,25 +503,47 @@ int parse_data(parser_t *parser) {
 
 int parse_code(parser_t *parser) {
     int ret = 0;
-    int label = find_label(parser);
 
-    if (label != -1) {
-        parser->cur_label = label;
-        fprintf(parser->out_fd, "F%d:\n", label);
+    // set if unset
+    if (parser->cur_label == -1) {
+        parser->cur_label = find_next_label(parser);
+    }
+    // "else if" because we need to move forward from the beginning first
+    else if (parser->next_label == -1 && !parser->is_last_label) {
+        parser->next_label = find_next_label(parser);
+    }
+    // we have moved to the next label's position
+    else if (parser->obj_code_counter == (size_t) parser->bin->function_offset_table[parser->next_label]) {
+        parser->cur_label = parser->next_label;
+        parser->next_label = find_next_label(parser);
+        // failed to find next label so this is probably the last one
+        if (parser->next_label == -1) {
+            parser->is_last_label = true;
+        }
+    }
 
-        if (parser->label_flags[label] & LABEL_RAW_DATA) {
+    // we are at the current label's beginning
+    if (parser->obj_code_counter == (size_t) parser->bin->function_offset_table[parser->cur_label]) {
+        // print label
+        fprintf(parser->out_fd, "F%d:\n", parser->cur_label);
+
+        // check if label has been flagged
+        if (parser->label_flags[parser->cur_label] & LABEL_RAW_DATA) {
             begin_raw_mode(parser);
             return ret;
-        } else if (parser->label_flags[label] & LABEL_RAW_STRING) {
+        } else if (parser->label_flags[parser->cur_label] & LABEL_RAW_STRING) {
             begin_string_mode(parser);
             return ret;
         }
     }
     
+    // try find instruction
     if (find_instruction(parser)) {
+        // print instruction
         if (should_print(parser)) {
             fprintf(parser->out_fd, "    %s", parser->cur_instr->name);
         }
+        // begin processing arguments
         begin_data_mode(parser);
     } else {
         fprintf(stderr, "Failed to find next instruction, switching to raw output\n");
@@ -513,22 +552,37 @@ int parse_code(parser_t *parser) {
     return ret;
 }
 
+bool within_current_label(parser_t *parser) {
+    return
+        // gone past end of code?
+        parser->obj_code_counter < parser->bin->object_code_len && (
+            // current label is last?
+            parser->is_last_label ||
+            // current position is less than next label's offset?
+            parser->obj_code_counter < (size_t) parser->bin->function_offset_table[parser->next_label]);
+}
+
 int parse_raw(parser_t *parser) {
     int ret = 0;
 
     unsigned int num_cols = 8;
     unsigned int i = 0;
     fprintf(parser->out_fd, "    HEX:");
+    // go through the whole block
     do {
+        // time to insert new row
         if (i != 0 && i % num_cols == 0) {
             fprintf(parser->out_fd, "\n    HEX:");
         }
+        // print byte
         fprintf(parser->out_fd, " %02x", parser->bin->object_code[parser->obj_code_counter]);
+        // move forward
         i++;
         parser->obj_code_counter++;
-    } while (find_label(parser) == -1 && parser->obj_code_counter < parser->bin->object_code_len);
+    } while (within_current_label(parser));
     fprintf(parser->out_fd, "\n");
 
+    // always assume start of block is code
     begin_code_mode(parser);
 
     return ret;
@@ -536,10 +590,12 @@ int parse_raw(parser_t *parser) {
 
 int parse_raw_string(parser_t *parser) {
     uint8_t *obj_code_cursor = &parser->bin->object_code[parser->obj_code_counter];
+    // print whole string
     fprintf(parser->out_fd, "    STR:");
     print_str(parser->out_fd, (uint16_t *) obj_code_cursor);
     fprintf(parser->out_fd, "\n");
 
+    // move forward
     parser->obj_code_counter += str_len(obj_code_cursor) * sizeof(uint16_t);
 
     begin_code_mode(parser);
@@ -574,14 +630,22 @@ int parser_loop(parser_t *parser) {
     return ret;
 }
 
+void init_parser(parser_t *parser) {
+    parser->obj_code_counter = 0;
+    parser->transform_args_to_immediate = true;
+    parser->cur_label = -1;
+    parser->next_label = -1;
+    parser->is_last_label = false;
+}
+
 int disassemble(FILE *out_fd, bin_t *bin) {
     parser_t parser = {0};
     parser.bin = bin;
     parser.label_flags = calloc(bin->function_offset_table_len, sizeof(label_flag));
-    parser.transform_args_to_immediate = true;
 
     // do a dry run to figure out label flags
     parser.out_fd = fopen("/dev/null", "w");
+    init_parser(&parser);
     begin_code_mode(&parser);
     int dry_ret = parser_loop(&parser);
     dispose_stack(&parser);
@@ -594,7 +658,7 @@ int disassemble(FILE *out_fd, bin_t *bin) {
 
     // real run
     parser.out_fd = out_fd;
-    parser.obj_code_counter = 0;
+    init_parser(&parser);
     begin_code_mode(&parser);
     int ret = parser_loop(&parser);
     dispose_stack(&parser);

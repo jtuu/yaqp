@@ -39,6 +39,8 @@ typedef struct parser {
     label_flag *label_flags;
     bool transform_args_to_immediate;
     int32_t cur_label;
+    int32_t next_label;
+    bool is_last_label;
 } parser_t;
 
 typedef struct argument {
