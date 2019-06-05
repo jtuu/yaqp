@@ -2,7 +2,7 @@
 YAQP is a Phantasy Star Online Blue Burst quest file parser. It features a disassembler and it can dump parts of a quest file in binary and output the enemy counts of a quest in JSON format.
 
 ## Usage
-`yaqp [-vjbdo] [quest.qst] ...`
+`yaqp [-vjbdop] [quest.qst] ...`
 
 * **-v**: verbose output
 * **-j**: write enemy counts as .json
